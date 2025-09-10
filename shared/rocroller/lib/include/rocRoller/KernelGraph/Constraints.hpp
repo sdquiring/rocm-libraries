@@ -61,6 +61,7 @@ namespace rocRoller
         ConstraintStatus SingleControlRoot(KernelGraph const& k);
         ConstraintStatus NoRedundantSetCoordinates(KernelGraph const& k);
         ConstraintStatus WalkableControlGraph(KernelGraph const& k);
+        ConstraintStatus NeededParallelism(KernelGraph const& k);
 
         using GraphConstraint = ConstraintStatus (*)(const KernelGraph& k);
     }

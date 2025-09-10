@@ -426,7 +426,12 @@ namespace rocRoller
                 }
             }
             m_context->kernel()->setWorkitemCount(workitemCount);
-            return original;
+            // return original;
+
+            auto rv = original;
+            rv.addConstraints({NeededParallelism});
+
+            return rv;
         }
     }
 }

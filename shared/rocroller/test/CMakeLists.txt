@@ -1,5 +1,6 @@
 # Copyright Advanced Micro Devices, Inc., or its affiliates.
 # SPDX-License-Identifier:  MIT
+set(TEST_REPORT_DIR "${PROJECT_BINARY_DIR}/test_report")
 
 find_package(GTest QUIET)
 if(NOT GTest_FOUND)
@@ -91,6 +92,8 @@ if(ROCROLLER_ENABLE_GEMM_CLIENT_TESTS)
         ENVIRONMENT "ROCROLLER_BUILD_DIR=${PROJECT_BINARY_DIR}" "LD_PRELOAD=${ASAN_LIB_PATH}" "ASAN_OPTIONS=detect_leaks=0"
         PROPERTIES
             SKIP_REGULAR_EXPRESSION ${rocroller_skip_regex}
+        EXTRA_ARGS
+            "--junit-xml=${TEST_REPORT_DIR}/$<TEST_NAME>"
     )
 endif()
 
@@ -121,7 +124,6 @@ add_subdirectory(standalone)
 add_subdirectory(unit)
 
 if(ROCROLLER_ENABLE_TEST_DISCOVERY)
-    set(TEST_REPORT_DIR "${PROJECT_BINARY_DIR}/test_report")
 
     include(GoogleTest)
     gtest_discover_tests(
