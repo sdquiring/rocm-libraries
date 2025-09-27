@@ -117,6 +117,10 @@ namespace rocRoller
         {
             const auto* derived = static_cast<const Derived*>(this);
             auto        wait    = derived->getWait(inst);
+
+            int instCycles = inst.numExecutedInstructions() + inst.peekedStatus().stallCycles;
+            m_programCycle += instCycles;
+
             if(wait >= 0)
             {
                 while(queueLen() > wait)
@@ -126,14 +130,10 @@ namespace rocRoller
                 }
             }
 
-            int instCycles = inst.numExecutedInstructions();
-
             if(derived->isMEMInstruction(inst))
             {
                 while(m_incomplete.size() >= m_queueAllotment)
                     queueShift();
-
-                m_programCycle += instCycles;
 
                 m_incomplete.push_back({.issuedCycle           = m_programCycle,
                                         .expectedCompleteCycle = m_programCycle + m_cyclesPerInst});
@@ -141,21 +141,18 @@ namespace rocRoller
                 static_assert(CIsAnyOf<Derived, VMEMObserver, DSMEMObserver>,
                               "Update the comment below if adding new memory observer");
 
-                if constexpr(std::is_same_v<Derived, VMEMObserver>)
-                    const_cast<Instruction&>(inst).addComment(
-                        fmt::format("VMEM: Expected complete at {} (current {})",
-                                    m_incomplete.back().expectedCompleteCycle,
-                                    m_programCycle));
-                else
-                    const_cast<Instruction&>(inst).addComment(
-                        fmt::format("DSMEM: Expected complete at {} (current {})",
-                                    m_incomplete.back().expectedCompleteCycle,
-                                    m_programCycle));
+                auto memType = std::is_same_v<Derived, VMEMObserver> ? "VMEM" : "DSMEM";
+                const_cast<Instruction&>(inst).addComment(
+                    fmt::format("{}: Expected complete at {} (current {}) QL {}/{} Stall {}",
+                                memType,
+                                m_incomplete.back().expectedCompleteCycle,
+                                m_programCycle,
+                                m_incomplete.size(),
+                                m_queueAllotment,
+                                inst.peekedStatus().stallCycles));
             }
             else
             {
-                m_programCycle += instCycles + inst.peekedStatus().stallCycles;
-
                 while(!m_incomplete.empty()
                       && m_programCycle >= m_incomplete.front().expectedCompleteCycle)
                     queueShift();

@@ -98,7 +98,10 @@ namespace rocRoller::KernelGraph::ControlGraph
 
     std::string Assign::toString() const
     {
-        return concatenate(name(), " ", regType, " ", expression);
+        auto expStr = Expression::toString(expression);
+        if(expStr.length() > 500)
+            expStr = expStr.substr(0, 500) + "...";
+        return concatenate(name(), " ", regType, " ", expStr);
     }
 
     std::string SeedPRNG::toString() const

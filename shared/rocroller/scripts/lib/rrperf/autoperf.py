@@ -35,6 +35,7 @@ import datetime
 import os
 import subprocess
 import sys
+import shutil
 from pathlib import Path
 from typing import List
 
@@ -48,7 +49,9 @@ def build_rocroller(
     checkout_dir: Path,
     project_dir: Path,
     commit: str,
-    threads: int = 32,
+    threads: int = None,
+    preset: str = None,
+    build_args: List[str] = [],
 ) -> Path:
     """
     Build the rocRoller GEMM client in the project directory.
@@ -58,6 +61,8 @@ def build_rocroller(
     if not checkout_dir.is_dir():
         git.clone(repo, checkout_dir)
         git.checkout(checkout_dir, commit)
+        user_file = repo / "shared" / "rocroller" / "CMakeUserPresets.json"
+        shutil.copy(user_file, project_dir)
 
     if git.is_dirty(checkout_dir) and commit != "current":
         print(f"Warning: {commit} is dirty")
@@ -65,54 +70,57 @@ def build_rocroller(
     build_dir = project_dir / "build_perf"
     build_dir.mkdir(parents=True, exist_ok=True)
 
-    mx_datagen_git_url_env_var = "ROCROLLER_MXDATAGENERATOR_GIT_URL"
-    mx_datagen_git_tag_env_var = "ROCROLLER_MXDATAGENERATOR_GIT_TAG"
-    mx_datagen_git_url = os.environ.get(mx_datagen_git_url_env_var)
-    mx_datagen_git_tag = os.environ.get(mx_datagen_git_tag_env_var)
+    def datagen_arg(part: str):
+        var = f"MXDATAGENERATOR_GIT_{part}"
+        env_var = f"ROCROLLER_{var}"
+        if env_var in os.environ:
+            return [f"-D{var}={os.environ[env_var]}"]
+        else:
+            print(
+                f"Warning: {env_var} not defined. Using default value for mxDataGenerator Git {part}."
+            )
+            return []
 
-    if not mx_datagen_git_url:
-        print(
-            f"Warning: {mx_datagen_git_url_env_var} not defined. Using mxDataGeneator Git URL in CMakeLists.txt."
-        )
-    if not mx_datagen_git_tag:
-        print(
-            f"Warning: {mx_datagen_git_tag_env_var} not defined. Using mxDataGeneator Git tag in CMakeLists.txt."
-        )
-
-    mx_datagen_git_url_flag = (
-        "-DMXDATAGENERATOR_GIT_URL=" + mx_datagen_git_url if mx_datagen_git_url else ""
-    )
-    mx_datagen_git_tag_flag = (
-        "-DMXDATAGENERATOR_GIT_TAG=" + mx_datagen_git_tag if mx_datagen_git_tag else ""
-    )
+    all_build_args = [
+        "cmake",
+        "-B",
+        build_dir,
+        "-S",
+        project_dir,
+        "--preset",
+        preset,
+        *datagen_arg("URL"),
+        *datagen_arg("TAG"),
+        *build_args,
+        # "-DCMAKE_BUILD_TYPE=Release",
+        # "-DROCROLLER_ENABLE_TIMERS=ON",
+        # "-DROCROLLER_ENABLE_FETCH=ON",
+        # "-DCMAKE_PREFIX_PATH='/opt/rocm;/opt/rocm/llvm'",
+        # "-DCMAKE_CXX_COMPILER=/opt/rocm/bin/amdclang++",
+        # "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+        # "-DROCROLLER_ENABLE_CPPCHECK=OFF",
+        # "../",
+    ]
+    all_build_args = map(str, all_build_args)
+    print(all_build_args)
 
     subprocess.run(
-        [
-            "cmake",
-            f"-B {build_dir}",
-            f"-S {project_dir}",
-            "-DCMAKE_BUILD_TYPE=Release",
-            "-DROCROLLER_ENABLE_TIMERS=ON",
-            "-DROCROLLER_ENABLE_FETCH=ON",
-            "-DCMAKE_PREFIX_PATH='/opt/rocm;/opt/rocm/llvm'",
-            "-DCMAKE_CXX_COMPILER=/opt/rocm/bin/amdclang++",
-            "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
-            "-DROCROLLER_ENABLE_CPPCHECK=OFF",
-            mx_datagen_git_url_flag,
-            mx_datagen_git_tag_flag,
-            "../",
-        ],
+        all_build_args,
         cwd=str(project_dir),
         check=True,
     )
+
+    def parallel_args(num):
+        if num is None:
+            return []
+        return ["--parallel", str(num)]
 
     subprocess.run(
         [
             "cmake",
             "--build",
             str(build_dir),
-            "--parallel",
-            str(threads),
+            *parallel_args(threads),
             "--target",
             "all_clients",
         ],
@@ -181,6 +189,21 @@ def get_args(parser: argparse.ArgumentParser):
         " overall command to fail.",
     )
 
+    parser.add_argument(
+        "--preset",
+        type=str,
+        default="autoperf",
+        help="CMake preset name to use",
+    )
+
+    parser.add_argument(
+        "--arg",
+        action="append",
+        default=[],
+        dest="build_args",
+        help="Add a build argument to CMake",
+    )
+
 
 def run(args):
     """Run performance tests against multiple commits"""
@@ -188,6 +211,8 @@ def run(args):
 
 
 def autoperf(
+    command: str,
+    group_results: bool,
     commits: List[str],
     clonedir: str,
     rundir: str,
@@ -202,10 +227,13 @@ def autoperf(
     plot_min=False,
     exclude_boxplot=False,
     x_value: str = "timestamp",
-    **kwargs,
+    preset: str = None,
+    build_args: List[str] = [],
 ):
     if no_fail is None:
         no_fail = []
+
+    # assert len(kwargs) == 0, kwargs
 
     monorepo_dir = git.top()
 
@@ -237,10 +265,12 @@ def autoperf(
             checkout_dir = monorepo_dir
 
         build_dir: Path = build_rocroller(
-            monorepo_dir,
-            checkout_dir,
-            checkout_dir / "shared" / "rocroller",
-            target,
+            repo=monorepo_dir,
+            checkout_dir=checkout_dir,
+            project_dir=checkout_dir / "shared" / "rocroller",
+            commit=target,
+            preset=preset,
+            build_args=build_args,
         )
         target_success, result_dir = suite_run.run_cli(
             build_dir=build_dir, rundir=rundir, suite=suite, filter=filter, recast=True

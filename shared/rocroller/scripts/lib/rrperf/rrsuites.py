@@ -1318,6 +1318,67 @@ def fp4_single_scale_target_d2lds_mi16x16x128_pf4x1():
     )
 
 
+def mxfp4_mxd2lds_pre1():
+    yield GEMMRun(
+        M=4096,
+        N=4096,
+        K=32768,
+        mac_m=256,
+        mac_n=256,
+        mac_k=128,
+        wave_m=16,
+        wave_n=16,
+        wave_k=128,
+        wave_b=1,
+        workgroup_size_x=128,
+        workgroup_size_y=2,
+        workgroupMappingDim=0,
+        workgroupMappingValue=2,
+        workgroupRemapXCC=False,
+        workgroupRemapXCCValue=-1,
+        unroll_x=0,
+        unroll_y=0,
+        loadLDS_A=True,
+        loadLDS_B=True,
+        storeLDS_D=False,
+        direct2LDS_A=True,
+        direct2LDS_B=True,
+        prefetch=True,
+        prefetchInFlight=4,
+        prefetchLDSFactor=1,
+        prefetchMixMemOps=True,
+        betaInFma=True,
+        scheduler="Priority",
+        schedulerCost="LinearWeightedSimple",
+        matchMemoryAccess=True,
+        types=TypeParameters(
+          trans_A="T",
+          trans_B="N",
+          type_A="fp4",
+          type_B="fp4",
+          type_C="half",
+          type_D="half",
+          type_acc="float",
+          scale_A="Separate",
+          scaleType_A="E8M0",
+          scale_B="Separate",
+          scaleType_B="E8M0",
+          scaleBlockSize=32,
+          scaleSkipPermlane=True,
+        ),
+        loadLDSScale_A=True,
+        loadLDSScale_B=True,
+        direct2LDSScale_A=True,
+        direct2LDSScale_B=True,
+        swizzleScale=True,
+        prefetchScale=False,
+        streamK=False,
+        streamKTwoTile=False,
+        numWarmUp=1000,
+        numOuter=1,
+        numInner=1000,
+        )
+
 def fp4_single_scale_target_d2lds_mi16x16x128_pf4x1_wgm():
     yield from add_wgm((0, 2), fp4_single_scale_target_d2lds_mi16x16x128_pf4x1())
 
@@ -1358,7 +1419,7 @@ def fp4_target_sweep_wgms():
     for wgm_dim in [0, 1]:
         for wgm_value in range(1, 50):
             yield from add_wgm(
-                (wgm_dim, wgm_value), fp4_single_scale_target_d2lds_mi16x16x128_pf4x1()
+                (wgm_dim, wgm_value), mxfp4_mxd2lds_pre1()
             )
 
 

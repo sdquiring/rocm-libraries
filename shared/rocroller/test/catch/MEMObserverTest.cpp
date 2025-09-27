@@ -91,12 +91,14 @@ namespace MEMObserverTest
                     Instruction("buffer_load_dwordx2", {s[3]}, {s[2], zero}, {}, ""),
                     Instruction("buffer_load_dwordx2", {s[5]}, {s[4], zero}, {}, ""),
                     Instruction("buffer_load_dwordx2", {s[7]}, {s[6], zero}, {}, ""),
+                    Instruction("buffer_load_dwordx2", {s[7]}, {s[6], zero}, {}, ""),
                 };
 
-                peekAndSchedule(context, insts[0]);
-                peekAndSchedule(context, insts[1]);
-                peekAndSchedule(context, insts[2]);
+                peekAndSchedule(context, insts[0], 0);
+                peekAndSchedule(context, insts[1], 0);
+                peekAndSchedule(context, insts[2], 0);
                 peekAndSchedule(context, insts[3], weights.vmemCycles - 2); // e.g. 384 - 3 + 1
+                peekAndSchedule(context, insts[4], 0); // e.g. 384 - 3 + 1
 
                 CHECK_THAT(context.output(), ContainsSubstring("CBNW: 0"));
                 CHECK_THAT(context.output(), ContainsSubstring("Inc: 3"));

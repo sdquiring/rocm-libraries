@@ -382,6 +382,8 @@ namespace rocRoller::Client::GEMMClient
         std::cout << fmt::format("Average runtime (s): {}\n", averageTime);
         std::cout << fmt::format("Average GFLOPS:      {}\n",
                                  numberOfFPOperations / GIGA / averageTime);
+        std::cerr << fmt::format("Average GFLOPS:      {}\n",
+                                 numberOfFPOperations / GIGA / averageTime);
 
         result.kernelAssemble = TimerPool::nanoseconds("Assembler::assembleMachineCode");
         result.kernelGenerate = TimerPool::nanoseconds("CommandKernel::generateKernel");

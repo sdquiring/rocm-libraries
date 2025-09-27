@@ -206,6 +206,8 @@ class GEMMSolution:
 
     loadLDSScale_A: bool = False
     loadLDSScale_B: bool = False
+    direct2LDSScale_A: bool = False
+    direct2LDSScale_B: bool = False
     swizzleScale: bool = False
     prefetchScale: bool = False
 

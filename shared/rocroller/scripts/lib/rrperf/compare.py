@@ -599,6 +599,12 @@ def html_summary(  # noqa: C901
 
     print("<h1>rocRoller performance</h1>", file=html_file)
 
+    print("<ul>", file=html_file)
+    for run in perf_runs:
+        print(f"<li>{run.commit}: {run.directory}</li>", file=html_file)
+
+    print("</ul>", file=html_file)
+
     if len(perf_runs) == 2:
         print("<h2>Overview</h2>", file=html_file)
         html_overview_table(html_file, summary, problems if group_results else [])

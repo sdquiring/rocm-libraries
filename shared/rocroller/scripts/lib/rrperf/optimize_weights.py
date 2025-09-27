@@ -143,10 +143,13 @@ def fixed_value(value):
 
 @dataclass(frozen=True, order=True, unsafe_hash=True)
 class Weights:
+    # Fix the cost of a stall cycle to provide a common reference point
+    # so that different randomly generated weights are of comparable
+    # magnitudes.
+    stallCycles: float = field(default_factory=fixed_value(1000.0))
+
     nops: float = field(default_factory=random_inv_exp())
 
-    vmcnt: float = field(default_factory=random_inv_exp())
-    lgkmcnt: float = field(default_factory=random_inv_exp())
 
     vmemCycles: int = field(
         default_factory=random_int(max=500), metadata={"isCoefficient": False}
@@ -161,41 +164,40 @@ class Weights:
         default_factory=random_int(min=1, max=6), metadata={"isCoefficient": False}
     )
 
-    vmQueueLen: int = field(
-        default_factory=random_int(), metadata={"isCoefficient": False}
-    )
-    vectorQueueSat: float = field(default_factory=random_inv_exp())
-    ldsQueueSat: float = field(default_factory=random_inv_exp())
-    lgkmQueueLen: int = field(
-        default_factory=random_int(), metadata={"isCoefficient": False}
-    )
+    vmQueueLen: int = field(default_factory=fixed_value(0))
 
-    # Fix the cost of a stall cycle to provide a common reference point
-    # so that different randomly generated weights are of comparable magnitudes.
-    stallCycles: float = field(default_factory=fixed_value(1000.0))
 
-    notMFMA: float = field(default_factory=random_inv_exp())
-    isMFMA: float = field(default_factory=random_inv_exp())
+    vectorQueueSat: float = field(default_factory=fixed_value(0))
+    ldsQueueSat: float = field(default_factory=fixed_value(0))
+    lgkmQueueLen: int = field(default_factory=fixed_value(0))
 
-    isSMEM: float = field(default_factory=random_inv_exp())
-    isSControl: float = field(default_factory=random_inv_exp())
-    isSALU: float = field(default_factory=random_inv_exp())
+    isSALU: float = field(default_factory=fixed_value(10))
+    isVALU: float = field(default_factory=fixed_value(10))
 
-    isVMEMRead: float = field(default_factory=random_inv_exp())
-    isVMEMWrite: float = field(default_factory=random_inv_exp())
-    isLDSRead: float = field(default_factory=random_inv_exp())
-    isLDSWrite: float = field(default_factory=random_inv_exp())
-    isVALU: float = field(default_factory=random_inv_exp())
+    vmcnt: float = field(default_factory=fixed_value(0))
+    lgkmcnt: float = field(default_factory=fixed_value(0))
 
-    isACCVGPRWrite: float = field(default_factory=random_inv_exp())
-    isACCVGPRRead: float = field(default_factory=random_inv_exp())
 
-    newSGPRs: float = field(default_factory=random_inv_exp())
-    newVGPRs: float = field(default_factory=random_inv_exp())
-    highWaterMarkSGPRs: float = field(default_factory=random_inv_exp())
-    highWaterMarkVGPRs: float = field(default_factory=random_inv_exp())
-    fractionOfSGPRs: float = field(default_factory=random_inv_exp())
-    fractionOfVGPRs: float = field(default_factory=random_inv_exp())
+    notMFMA: float = field(default_factory=fixed_value(0))
+    isMFMA: float = field(default_factory=fixed_value(0))
+
+    isSMEM: float = field(default_factory=fixed_value(0))
+    isSControl: float = field(default_factory=fixed_value(0))
+
+    isVMEMRead: float = field(default_factory=fixed_value(0))
+    isVMEMWrite: float = field(default_factory=fixed_value(0))
+    isLDSRead: float = field(default_factory=fixed_value(0))
+    isLDSWrite: float = field(default_factory=fixed_value(0))
+
+    isACCVGPRWrite: float = field(default_factory=fixed_value(0))
+    isACCVGPRRead: float = field(default_factory=fixed_value(0))
+
+    newSGPRs: float = field(default_factory=fixed_value(0))
+    newVGPRs: float = field(default_factory=fixed_value(0))
+    highWaterMarkSGPRs: float = field(default_factory=fixed_value(0))
+    highWaterMarkVGPRs: float = field(default_factory=fixed_value(0))
+    fractionOfSGPRs: float = field(default_factory=fixed_value(0))
+    fractionOfVGPRs: float = field(default_factory=fixed_value(0))
 
     # It doesn't make a lot of sense to allow the optimizer to choose
     # whether to run out of registers should the opportunity arise.
