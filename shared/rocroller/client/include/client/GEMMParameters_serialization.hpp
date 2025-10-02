@@ -204,6 +204,7 @@ namespace rocRoller::Serialization
 
             iot::mapRequired(io, "streamK", params.streamK);
             iot::mapRequired(io, "streamKTwoTile", params.streamKTwoTile);
+            iot::mapRequired(io, "streamKTwoTileDPFirst", params.streamKTwoTileDPFirst);
 
             iot::mapOptional(io, "version", params.version);
         }
