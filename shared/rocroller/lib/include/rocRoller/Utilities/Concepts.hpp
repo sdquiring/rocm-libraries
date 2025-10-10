@@ -47,7 +47,7 @@ namespace rocRoller
     template <typename T>
     concept CHasToStringMember = requires(T const& x)
     {
-        !std::convertible_to<std::string, T>;
+        requires !std::convertible_to<std::string, T>;
 
         { x.toString() } -> std::convertible_to<std::string>;
     };
@@ -55,7 +55,9 @@ namespace rocRoller
     template <typename T>
     concept CHasToString = requires(T const& x)
     {
-        !std::convertible_to<std::string, T>;
+        requires !std::convertible_to<std::string, T>;
+        requires !std::is_arithmetic_v<T>;
+        requires !CHasToStringMember<T>;
 
         { toString(x) } -> std::convertible_to<std::string>;
     };

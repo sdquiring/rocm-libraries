@@ -35,7 +35,6 @@ namespace rocRoller
 
     namespace KernelGraph::CoordinateGraph
     {
-
         template <Graph::Direction Dir, typename Visitor>
         inline std::vector<Expression::ExpressionPtr>
             CoordinateGraph::traverse(std::vector<Expression::ExpressionPtr> sdims,
@@ -183,8 +182,8 @@ namespace rocRoller
         }
 
         template <typename T>
-        requires(std::constructible_from<CoordinateGraph::Element, T>) inline std::optional<
-            T> CoordinateGraph::get(int tag) const
+            requires(std::constructible_from<CoordinateGraph::Element, T>)
+        inline std::optional<T> CoordinateGraph::get(int tag) const
         {
             auto x = getElement(tag);
             if constexpr(std::constructible_from<Edge, T>)
@@ -230,6 +229,12 @@ namespace rocRoller
         inline std::string name(CoordinateGraph::Element const& el)
         {
             return CoordinateGraph::ElementName(el);
+        }
+
+        inline std::string toString(CoordinateGraph::Element const& el)
+        {
+            auto vis = [](auto const& el) { return toString(el); };
+            return std::visit(vis, el);
         }
     }
 }

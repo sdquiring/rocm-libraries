@@ -116,10 +116,15 @@ namespace rocRoller
     }
 
     template <CHasToString T>
-    requires(!std::is_arithmetic_v<T>) inline std::ostream& operator<<(std::ostream& stream,
-                                                                       T const&      x)
+    inline std::ostream& operator<<(std::ostream& stream, T const& x)
     {
         return stream << toString(x);
+    }
+
+    template <CHasToStringMember T>
+    inline std::ostream& operator<<(std::ostream& stream, T const& x)
+    {
+        return stream << x.toString();
     }
 
     template <typename Container, typename Joiner>
@@ -376,7 +381,8 @@ namespace rocRoller
     T fromString(std::string const& str);
 
     template <CHasName T>
-    requires(std::default_initializable<T>) std::string name()
+        requires(std::default_initializable<T>)
+    std::string name()
     {
         T obj;
         return name(obj);

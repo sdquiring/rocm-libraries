@@ -92,5 +92,12 @@ namespace rocRoller
 
         template <typename T>
         concept CConcreteEdge = (CEdge<T> && !std::same_as<Edge, T>);
+
+        template <typename T>
+        concept CUndefinedEdge = CIsAnyOf<T, ConstructMacroTile, DestructMacroTile, Forget>;
+
+        template <typename T>
+        concept CIdentityEdge = CIsAnyOf<T, Inherit, MakeOutput, PassThrough>;
+
     }
 }

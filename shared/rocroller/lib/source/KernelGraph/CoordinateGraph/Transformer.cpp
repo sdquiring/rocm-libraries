@@ -30,6 +30,7 @@
 #include <rocRoller/Context.hpp>
 #include <rocRoller/KernelGraph/CoordinateGraph/CoordinateEdgeVisitor.hpp>
 #include <rocRoller/KernelGraph/CoordinateGraph/CoordinateGraph.hpp>
+#include <rocRoller/KernelGraph/CoordinateGraph/CoordinateGraph_detail.hpp>
 #include <rocRoller/KernelGraph/CoordinateGraph/Transformer.hpp>
 
 // TODO Remove this when Workgroup removed from RegisterTagManager
@@ -144,47 +145,23 @@ namespace rocRoller
         std::vector<Expression::ExpressionPtr>
             Transformer::forward(std::vector<int> const& dsts) const
         {
-            std::vector<Expression::ExpressionPtr> indexes;
-            std::vector<int>                       srcs;
-            for(auto const& kv : m_indexes)
-            {
-                srcs.push_back(kv.first);
-                indexes.push_back(kv.second);
-            }
-            return transduce(m_graph->forward(indexes, srcs, dsts));
+            ForwardEdgeVisitor visitor;
+            return transduce(traverseLazy(*m_graph, dsts, m_indexes, visitor));
         }
 
         std::vector<Expression::ExpressionPtr>
             Transformer::reverse(std::vector<int> const& dsts) const
         {
-            std::vector<Expression::ExpressionPtr> indexes;
-            std::vector<int>                       srcs;
-            for(auto const& kv : m_indexes)
-            {
-                srcs.push_back(kv.first);
-                indexes.push_back(kv.second);
-            }
-            return transduce(m_graph->reverse(indexes, dsts, srcs));
+            ReverseEdgeVisitor visitor;
+            return transduce(traverseLazy(*m_graph, dsts, m_indexes, visitor));
         }
 
         template <typename Visitor>
         std::vector<Expression::ExpressionPtr>
-            Transformer::stride(std::vector<int> const& dsts, bool forward, Visitor& visitor) const
+            Transformer::stride(std::vector<int> const& dsts, Visitor& visitor) const
 
         {
-            std::vector<Expression::ExpressionPtr> indexes;
-            std::vector<int>                       srcs;
-            for(auto const& kv : m_indexes)
-            {
-                srcs.push_back(kv.first);
-                indexes.push_back(kv.second);
-            }
-
-            // this call to traverse with EdgeDiffVisitor populates the deltas associated with dsts.
-            if(forward)
-                m_graph->traverse<Graph::Direction::Downstream>(indexes, srcs, dsts, visitor);
-            else
-                m_graph->traverse<Graph::Direction::Upstream>(indexes, dsts, srcs, visitor);
+            traverseLazy(*m_graph, dsts, m_indexes, visitor);
 
             std::vector<Expression::ExpressionPtr> deltas;
             for(auto const& dst : dsts)
@@ -200,7 +177,7 @@ namespace rocRoller
         {
             AssertFatal(dx);
             auto visitor = ForwardEdgeDiffVisitor(x, dx);
-            return stride(dsts, true, visitor);
+            return stride(dsts, visitor);
         }
 
         std::vector<Expression::ExpressionPtr> Transformer::reverseStride(
@@ -208,7 +185,7 @@ namespace rocRoller
         {
             AssertFatal(dx);
             auto visitor = ReverseEdgeDiffVisitor(x, dx);
-            return stride(dsts, false, visitor);
+            return stride(dsts, visitor);
         }
 
         Expression::ExpressionPtr Transformer::transduce(Expression::ExpressionPtr exp) const

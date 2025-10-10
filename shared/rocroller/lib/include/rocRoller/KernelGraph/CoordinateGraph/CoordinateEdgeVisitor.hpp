@@ -37,10 +37,7 @@ namespace rocRoller
 {
     namespace KernelGraph::CoordinateGraph
     {
-        template <typename T>
-        concept CTUndefinedEdge = std::is_same<ConstructMacroTile, T>::value || std::
-            is_same<DestructMacroTile, T>::value || std::is_same<Forget, T>::value;
-
+        template <typename Derived>
         struct BaseEdgeVisitor
         {
             // index expressions for the dimensions
@@ -49,21 +46,52 @@ namespace rocRoller
             std::vector<int>                       srcTags, dstTags;
 
             inline void setLocation(std::vector<Expression::ExpressionPtr> _indexes,
-                                    std::vector<Dimension> const&          _srcs,
-                                    std::vector<Dimension> const&          _dsts,
-                                    std::vector<int> const&                _srcTags,
-                                    std::vector<int> const&                _dstTags)
+                                    std::vector<Dimension>                 _srcs,
+                                    std::vector<Dimension>                 _dsts,
+                                    std::vector<int>                       _srcTags,
+                                    std::vector<int>                       _dstTags)
             {
-                indexes = _indexes;
-                srcs    = _srcs;
-                dsts    = _dsts;
-                srcTags = _srcTags;
-                dstTags = _dstTags;
+                indexes = std::move(_indexes);
+                srcs    = std::move(_srcs);
+                dsts    = std::move(_dsts);
+                srcTags = std::move(_srcTags);
+                dstTags = std::move(_dstTags);
+            }
+
+            Derived* derivedThis()
+            {
+                return static_cast<Derived*>(this);
+            }
+
+            Derived const* derivedThis() const
+            {
+                return static_cast<Derived*>(this);
+            }
+
+            inline std::vector<Expression::ExpressionPtr> errorCase(auto const& e)
+            {
+                Throw<FatalError>("Transform ", name(e), " not defined for ", Derived::Name, ".");
+            }
+
+            std::vector<Expression::ExpressionPtr> call(Edge const& e)
+            {
+                return std::visit(
+                    [this](Edge const& edge) {
+                        return std::visit(
+                            [&](auto const& subEdge) {
+                                return std::visit(*derivedThis(), subEdge);
+                            },
+                            edge);
+                    },
+                    e);
             }
         };
 
-        struct ForwardEdgeVisitor : public BaseEdgeVisitor
+        struct ForwardEdgeVisitor : public BaseEdgeVisitor<ForwardEdgeVisitor>
         {
+            inline constexpr static auto Direction = Graph::Direction::Downstream;
+            inline static std::string    Name{"ForwardEdgeVisitor"};
+
             std::vector<Expression::ExpressionPtr> operator()(Flatten const& e)
             {
                 auto result = indexes[0];
@@ -154,37 +182,26 @@ namespace rocRoller
                 return rv;
             }
 
-            template <CTUndefinedEdge T>
-            std::vector<Expression::ExpressionPtr> operator()(T const& e)
-            {
-                Throw<FatalError>("Edge transform not defined.");
-            }
-
             template <typename T>
-            std::vector<Expression::ExpressionPtr> operator()(Split const& e)
-            {
-                Throw<FatalError>("Split edge found in forward transform.");
-            }
-
-            template <typename T>
+                requires(CIdentityEdge<T> || std::same_as<Split, T>)
             std::vector<Expression::ExpressionPtr> operator()(T const& e)
             {
                 return indexes;
             }
 
-            std::vector<Expression::ExpressionPtr> call(Edge const& e)
+            template <typename T>
+                requires(CConcreteDataFlowEdge<T> || CUndefinedEdge<T>)
+            std::vector<Expression::ExpressionPtr> operator()(T const& e)
             {
-                return std::visit(
-                    [&](Edge const& edge) {
-                        return std::visit(
-                            [&](auto const& subEdge) { return std::visit(*this, subEdge); }, edge);
-                    },
-                    e);
+                return errorCase(e);
             }
         };
 
-        struct ReverseEdgeVisitor : public BaseEdgeVisitor
+        struct ReverseEdgeVisitor : public BaseEdgeVisitor<ReverseEdgeVisitor>
         {
+            inline constexpr static auto Direction = Graph::Direction::Upstream;
+            inline static std::string    Name{"ReverseEdgeVisitor"};
+
             std::vector<Expression::ExpressionPtr> operator()(Flatten const& e)
             {
                 AssertFatal(dsts.size() == 1, ShowValue(dsts.size()));
@@ -279,33 +296,26 @@ namespace rocRoller
                 return {result};
             }
 
-            template <CTUndefinedEdge T>
-            std::vector<Expression::ExpressionPtr> operator()(T const& e)
-            {
-                Throw<FatalError>("Edge transform not defined.");
-            }
-
             template <typename T>
+                requires(CIdentityEdge<T> || std::same_as<Join, T>)
             std::vector<Expression::ExpressionPtr> operator()(T const& e)
             {
                 return indexes;
             }
 
-            std::vector<Expression::ExpressionPtr> call(Edge const& e)
+            template <typename T>
+                requires(CUndefinedEdge<T> || CConcreteDataFlowEdge<T>)
+            std::vector<Expression::ExpressionPtr> operator()(T const& e)
             {
-                return std::visit(
-                    [&](Edge const& edge) {
-                        return std::visit(
-                            [&](auto const& subEdge) { return std::visit(*this, subEdge); }, edge);
-                    },
-                    e);
+                return errorCase(e);
             }
         };
 
         /*
          * Diff edge visitors.
          */
-        struct BaseEdgeDiffVisitor : public BaseEdgeVisitor
+        template <typename Derived>
+        struct BaseEdgeDiffVisitor : public BaseEdgeVisitor<Derived>
         {
             Expression::ExpressionPtr zero;
 
@@ -336,8 +346,11 @@ namespace rocRoller
             }
         };
 
-        struct ForwardEdgeDiffVisitor : public BaseEdgeDiffVisitor
+        struct ForwardEdgeDiffVisitor : public BaseEdgeDiffVisitor<ForwardEdgeDiffVisitor>
         {
+            inline constexpr static auto Direction = Graph::Direction::Downstream;
+            inline static std::string    Name{"ForwardEdgeDiffVisitor"};
+
             using BaseEdgeDiffVisitor::BaseEdgeDiffVisitor;
 
             std::vector<Expression::ExpressionPtr> operator()(Flatten const& e)
@@ -481,32 +494,20 @@ namespace rocRoller
                 return {indexes};
             }
 
-            template <CTUndefinedEdge T>
-            std::vector<Expression::ExpressionPtr> operator()(T const& e)
-            {
-                Throw<FatalError>("Edge transform not defined.");
-            }
-
             template <typename T>
+                requires(CConcreteDataFlowEdge<T> || CUndefinedEdge<T> || std::same_as<T, Split>
+                         || (CIdentityEdge<T> && !std::same_as<T, PassThrough>))
             std::vector<Expression::ExpressionPtr> operator()(T const& e)
             {
-                Throw<FatalError>("Forward derivative not implemented yet for: ",
-                                  ShowValue(e.toString()));
-            }
-
-            std::vector<Expression::ExpressionPtr> call(Edge const& e)
-            {
-                return std::visit(
-                    [&](Edge const& edge) {
-                        return std::visit(
-                            [&](auto const& subEdge) { return std::visit(*this, subEdge); }, edge);
-                    },
-                    e);
+                return errorCase(e);
             }
         };
 
-        struct ReverseEdgeDiffVisitor : public BaseEdgeDiffVisitor
+        struct ReverseEdgeDiffVisitor : public BaseEdgeDiffVisitor<ReverseEdgeDiffVisitor>
         {
+            inline constexpr static auto Direction = Graph::Direction::Upstream;
+            inline static std::string    Name{"ReverseEdgeDiffVisitor"};
+
             using BaseEdgeDiffVisitor::BaseEdgeDiffVisitor;
 
             std::vector<Expression::ExpressionPtr> operator()(Split const& e)
@@ -646,27 +647,12 @@ namespace rocRoller
                 return {indexes};
             }
 
-            template <CTUndefinedEdge T>
-            std::vector<Expression::ExpressionPtr> operator()(T const& e)
-            {
-                Throw<FatalError>("Edge transform not defined.");
-            }
-
             template <typename T>
+                requires(CConcreteDataFlowEdge<T> || CUndefinedEdge<T> || std::same_as<T, Join>
+                         || (CIdentityEdge<T> && !std::same_as<T, PassThrough>))
             std::vector<Expression::ExpressionPtr> operator()(T const& e)
             {
-                Throw<FatalError>("Reverse derivative not implemented yet for: ",
-                                  ShowValue(e.toString()));
-            }
-
-            std::vector<Expression::ExpressionPtr> call(Edge const& e)
-            {
-                return std::visit(
-                    [&](Edge const& edge) {
-                        return std::visit(
-                            [&](auto const& subEdge) { return std::visit(*this, subEdge); }, edge);
-                    },
-                    e);
+                Throw<FatalError>("Reverse edge transform ", name(e), " not defined.");
             }
         };
     }

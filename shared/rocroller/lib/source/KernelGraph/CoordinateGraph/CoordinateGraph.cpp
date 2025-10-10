@@ -27,6 +27,7 @@
 #include <vector>
 
 #include <rocRoller/KernelGraph/CoordinateGraph/CoordinateGraph.hpp>
+#include <rocRoller/KernelGraph/CoordinateGraph/CoordinateGraph_detail.hpp>
 
 #include <rocRoller/KernelGraph/CoordinateGraph/CoordinateEdgeVisitor.hpp>
 
@@ -45,7 +46,14 @@ namespace rocRoller
         {
             AssertFatal(sdims.size() == srcs.size(), ShowValue(sdims));
             auto visitor = ForwardEdgeVisitor();
-            return traverse<Graph::Direction::Downstream>(sdims, srcs, dsts, visitor);
+            // return traverse<Graph::Direction::Downstream>(sdims, srcs, dsts, visitor);
+
+            std::unordered_map<int, Expression::ExpressionPtr> known;
+            for(int idx = 0; idx < sdims.size(); idx++)
+                known[srcs[idx]] = sdims[idx];
+
+            return traverseLazy(*this, dsts, known, visitor);
+
         }
 
         std::vector<Expression::ExpressionPtr>
@@ -55,7 +63,13 @@ namespace rocRoller
         {
             AssertFatal(sdims.size() == dsts.size(), ShowValue(sdims));
             auto visitor = ReverseEdgeVisitor();
-            return traverse<Graph::Direction::Upstream>(sdims, srcs, dsts, visitor);
+            // return traverse<Graph::Direction::Upstream>(sdims, srcs, dsts, visitor);
+
+            std::unordered_map<int, Expression::ExpressionPtr> known;
+            for(int idx = 0; idx < sdims.size(); idx++)
+                known[dsts[idx]] = sdims[idx];
+
+            return traverseLazy(*this, srcs, known, visitor);
         }
 
         bool CoordinateGraph::isModificationAllowed(int index) const

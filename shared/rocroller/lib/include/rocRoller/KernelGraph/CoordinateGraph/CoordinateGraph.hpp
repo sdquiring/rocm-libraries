@@ -175,6 +175,7 @@ namespace rocRoller
         };
 
         std::string name(CoordinateGraph::Element const& el);
+        std::string toString(CoordinateGraph::Element const& el);
     }
 }
 

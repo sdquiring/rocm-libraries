@@ -163,7 +163,7 @@ namespace rocRoller::KernelGraph
                         fastestCoord = coord;
                         maxSubDim    = 1000;
                     },
-                    [&](auto const& other) { Log::debug("Other: {}", toString(other)); }};
+                    [&](auto const& other) { Log::debug("Other: {}", other.toString()); }};
 
                 std::visit(visitor, dim);
             }
