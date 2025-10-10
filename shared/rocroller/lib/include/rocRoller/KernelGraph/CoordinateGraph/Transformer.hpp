@@ -129,7 +129,7 @@ namespace rocRoller
 
             template <typename Visitor>
             std::vector<Expression::ExpressionPtr>
-                stride(std::vector<int> const&, bool forward, Visitor& visitor) const;
+                stride(std::vector<int> const&, Visitor& visitor) const;
 
             std::map<int, Expression::ExpressionPtr> m_indexes;
 

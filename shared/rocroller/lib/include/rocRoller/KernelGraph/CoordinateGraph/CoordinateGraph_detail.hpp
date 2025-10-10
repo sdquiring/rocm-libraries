@@ -62,7 +62,7 @@ namespace rocRoller
 
             Log::critical("{}traverseSingle({})", tab, dimToGet);
 
-            // The real implementation, wrapped in a lambda so we can early return and have the cache logic still work.
+            // The real implementation, wrapped in a lambda so we can early return.
             auto rv = [&]() -> std::optional<Expression::ExpressionPtr> {
                 auto isCoordinateEdge = [&](int edgeTag) -> bool {
                     auto e = graph.getEdge(edgeTag);
@@ -72,11 +72,10 @@ namespace rocRoller
                 auto getDim = [&](int dimTag) { return graph.getNode(dimTag); };
 
                 auto allNeighbours = graph.getNeighbours<OppositeDir>(dimToGet);
-                auto ctOuts        = std::ranges::views::filter(allNeighbours, isCoordinateEdge);
+                auto ctNeighbours  = std::ranges::views::filter(allNeighbours, isCoordinateEdge);
 
-                for(int ctEdgeTag : ctOuts)
+                for(int ctEdgeTag : ctNeighbours)
                 {
-
                     auto loc = graph.getLocation(ctEdgeTag);
 
                     auto const& srcTags = forward ? loc.incoming : loc.outgoing;
