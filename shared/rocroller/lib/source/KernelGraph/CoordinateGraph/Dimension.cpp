@@ -174,6 +174,13 @@ namespace rocRoller
         {
         }
 
+        LDS::LDS(bool const isDirect2LDS, std::vector<int> const& sizes)
+            : BaseDimension()
+            , isDirect2LDS(isDirect2LDS)
+            , sizes(sizes)
+        {
+        }
+
         Unroll::Unroll() = default;
 
         Unroll::Unroll(uint const usize)
