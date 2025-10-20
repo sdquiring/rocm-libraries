@@ -231,6 +231,8 @@ namespace rocRoller
 
         std::optional<std::pair<int, int>> getSegment(int tag) const;
 
+        std::string aliasDescription() const;
+
     private:
         std::weak_ptr<Context>            m_context;
         std::map<int, Register::ValuePtr> m_registers;

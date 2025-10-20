@@ -138,6 +138,19 @@ namespace rocRoller
         m_indexes[src] = {dst, index};
     }
 
+    std::string RegisterTagManager::aliasDescription() const
+    {
+        std::string rv;
+
+        for(auto const& [src, dst]: m_aliases)
+        {
+            if(dst != ALIAS_DEST)
+                rv += fmt::format("{} -> {}\n", src, dst);
+        }
+
+        return rv;
+    }
+
     void RegisterTagManager::addSegment(int src, int dst, int index)
     {
         AssertFatal(src > 0, ShowValue(src));

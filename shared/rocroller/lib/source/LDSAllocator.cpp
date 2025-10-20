@@ -26,6 +26,7 @@
 
 #include <rocRoller/InstructionValues/LDSAllocator.hpp>
 #include <rocRoller/Utilities/Error.hpp>
+#include <rocRoller/Utilities/Settings.hpp>
 #include <rocRoller/Utilities/Utils.hpp>
 
 #include <iostream>
@@ -34,7 +35,7 @@
 namespace rocRoller
 {
     LDSAllocator::LDSAllocator(unsigned int maxAmount)
-        : m_maxAmount(maxAmount)
+        : m_maxAmount(Settings::Get(Settings::NoRegisterLimits) ? maxAmount * 10 : maxAmount)
     {
     }
 

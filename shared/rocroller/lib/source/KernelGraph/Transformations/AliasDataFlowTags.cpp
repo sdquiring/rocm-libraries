@@ -31,6 +31,8 @@
 
 #include <rocRoller/Graph/GraphUtilities.hpp>
 
+#define debug critical
+
 namespace rocRoller
 {
     namespace KernelGraph
@@ -141,7 +143,30 @@ namespace rocRoller
                     allNodes.insert(gap.end.begin(), gap.end.end());
                 }
 
-                return kgraph.control.nodeOrderTableString(allNodes);
+                std::string nodeInfo;
+                {
+                    bool first = true;
+                    for(auto node : allNodes)
+                    {
+                        auto stack = controlStack(node, kgraph);
+
+                        auto isInLoop = std::ranges::any_of(
+                            stack, kgraph.control.isElemType<ControlGraph::ForLoopOp>());
+
+                        if(!first)
+                            nodeInfo += ", ";
+
+                        nodeInfo += std::to_string(node);
+                        if(isInLoop)
+                            nodeInfo += " (l)";
+
+                        first = false;
+                    }
+                }
+
+                auto table = kgraph.control.nodeOrderTableString(allNodes);
+
+                return fmt::format("Nodes {{{}}}\n{}", nodeInfo, table);
             }
 
             std::set<int> TagExtent::allNodes() const
@@ -322,17 +347,28 @@ namespace rocRoller
                         rv.dataType
                             = ControlGraph::getDataType(kgraph.control.getNode(rec.control));
 
-                    auto mt
-                        = kgraph.coordinates.getNode<CoordinateGraph::MacroTile>(rec.coordinate);
+                    auto node = kgraph.coordinates.getNode(rec.coordinate);
 
-                    if(rv.sizes.empty())
-                        rv.sizes = mt.sizes;
+                    auto visitor = rocRoller::overloaded{
+                        [&](CoordinateGraph::MacroTile const& mt) {
+                            if(rv.sizes.empty())
+                                rv.sizes = mt.sizes;
 
-                    if(rv.memoryType == MemoryType::None)
-                        rv.memoryType = mt.memoryType;
+                            if(rv.memoryType == MemoryType::None)
+                                rv.memoryType = mt.memoryType;
 
-                    if(rv.layoutType == LayoutType::None)
-                        rv.layoutType = mt.layoutType;
+                            if(rv.layoutType == LayoutType::None)
+                                rv.layoutType = mt.layoutType;
+                        },
+                        [&](CoordinateGraph::LDS const& lds) {
+                            rv.sizes      = {1};
+                            rv.memoryType = MemoryType::LDS;
+                        },
+                        [&](auto const& node) {
+                            Throw<FatalError>("Unexpected Dimension: {}", toString(node));
+                        }};
+
+                    std::visit(visitor, node);
                 }
 
                 return rv;
@@ -352,6 +388,11 @@ namespace rocRoller
                 rv = getInfo(kgraph, records);
 
                 auto ordering = getOrdering(kgraph, records);
+
+                {
+                    std::ofstream file("order_graph.dot");
+                    file << ordering.toDOT();
+                }
 
                 auto logger = Log::getLogger();
                 if(logger->should_log(LogLevel::Trace))
@@ -437,6 +478,19 @@ namespace rocRoller
                 std::map<TagExtent::CategoryKey, std::list<TagExtent>> groupedExtents;
 
                 ControlFlowRWTracer tracer(kgraph);
+
+                for(auto lds : kgraph.coordinates.getNodes<CoordinateGraph::LDS>())
+                {
+                    auto records = tracer.coordinatesReadWrite(lds);
+
+                    auto extent = getExtent(kgraph, records);
+
+                    if(!extent.empty() && extent.dataType != DataType::None
+                       && extent.layoutType != LayoutType::MATRIX_ACCUMULATOR)
+                    {
+                        groupedExtents[extent.typeKey()].push_back(std::move(extent));
+                    }
+                }
 
                 for(auto mt : kgraph.coordinates.getNodes<CoordinateGraph::MacroTile>())
                 {
