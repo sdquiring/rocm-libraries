@@ -173,6 +173,14 @@ namespace rocRoller
             , isDirect2LDS(isDirect2LDS)
         {
         }
+        std::string LDS::toString() const
+        {
+            return fmt::format("LDS: size {}, stride {}, offset {}, tag {}",
+                               Expression::toString(size),
+                               Expression::toString(stride),
+                               Expression::toString(offset),
+                               static_cast<int>(commandTag));
+        }
 
         Unroll::Unroll() = default;
 
