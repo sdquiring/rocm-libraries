@@ -46,7 +46,26 @@ namespace rocRoller
             };
 
             /**
+             * Will probably delete.
+             */
+            enum class ExtentCategory : int
+            {
+                Unknown = 0,
+                LiveSpan,
+                LivenessGap,
+                SplitRange,
+
+                Count
+            };
+
+            /**
              * Represents a span of time in the kernel.
+             * 
+             * The span includes:
+             * - All the nodes in `begin`.
+             * - All the nodes in `end`.
+             * - All nodes that are both after all the nodes in `begin` and
+             *   before all the nodes in `end`.
              *
              * There could be some ambiguity still left to the scheduler as to
              * the beginning or end of the span as those nodes may not be
@@ -66,8 +85,9 @@ namespace rocRoller
              */
             struct GraphExtent
             {
-                std::set<int> begin;
-                std::set<int> end;
+                std::set<int>  begin;
+                std::set<int>  end;
+                ExtentCategory kind = ExtentCategory::Unknown;
 
                 std::string toString() const;
 
@@ -75,6 +95,11 @@ namespace rocRoller
                  * Returns true if `this` is entirely within `gap`.
                  */
                 bool isWithin(KernelGraph const& kgraph, GraphExtent const& gap) const;
+
+                /**
+                 * Returns true if the span includes `opTag`.
+                 */
+                bool contains(KernelGraph const& kgraph, int opTag) const;
             };
 
             std::ostream& operator<<(std::ostream& stream, GraphExtent const& extent);
@@ -88,15 +113,18 @@ namespace rocRoller
             {
                 using CategoryKey = std::tuple<MemoryType, LayoutType, DataType, int>;
 
-                int              baseTag = -1;
-                std::set<int>    tags;
-                MemoryType       memoryType = MemoryType::None;
-                LayoutType       layoutType = LayoutType::None;
-                DataType         dataType   = DataType::None;
+                int           baseTag = -1;
+                std::set<int> tags;
+                MemoryType    memoryType = MemoryType::None;
+                LayoutType    layoutType = LayoutType::None;
+                DataType      dataType   = DataType::None;
                 std::vector<int> sizes;
                 GraphExtent      extent;
 
                 std::vector<GraphExtent> gaps;
+                std::vector<GraphExtent> validSplits;
+
+                TagRWGraph graph;
 
                 CategoryKey typeKey() const;
 
@@ -115,9 +143,14 @@ namespace rocRoller
                 void merge(KernelGraph const& kgraph, TagExtent const& inner);
 
                 /**
+                 * Splits `range` out of `this` into a new TagExtent and return it.
+                 */
+                std::vector<TagExtent> split(GraphExtent const& range);
+
+                /**
                  * Returns true if `this` fits within a gap within `outer`.
                  */
-                bool fitsWithin(KernelGraph const& kgraph, TagExtent const& outer);
+                bool fitsWithin(KernelGraph const& kgraph, TagExtent const& outer) const;
             };
 
             /**

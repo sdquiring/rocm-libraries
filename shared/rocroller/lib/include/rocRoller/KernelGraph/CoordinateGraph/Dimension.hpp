@@ -271,6 +271,8 @@ namespace rocRoller
             explicit LDS(bool const isDirect2LDS);
 
             std::string name() const override;
+
+            std::string toString() const override;
         };
 
         /**

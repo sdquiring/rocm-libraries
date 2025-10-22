@@ -135,13 +135,21 @@ namespace rocRoller
 
             std::string TagExtent::orderInfo(KernelGraph const& kgraph) const
             {
-                std::set<int> allNodes = extent.begin;
-                allNodes.insert(extent.end.begin(), extent.end.end());
+                std::set<int> allNodes_ = extent.begin;
+                allNodes_.insert(extent.end.begin(), extent.end.end());
                 for(auto const& gap : gaps)
                 {
-                    allNodes.insert(gap.begin.begin(), gap.begin.end());
-                    allNodes.insert(gap.end.begin(), gap.end.end());
+                    allNodes_.insert(gap.begin.begin(), gap.begin.end());
+                    allNodes_.insert(gap.end.begin(), gap.end.end());
                 }
+
+                auto topoCompare = [&](int a, int b) {
+                    return kgraph.control.compareNodes(rocRoller::UpdateCache, a, b)
+                           == ControlGraph::NodeOrdering::LeftFirst;
+                };
+
+                std::vector<int> allNodes(allNodes_.begin(), allNodes_.end());
+                std::sort(allNodes.begin(), allNodes.end(), topoCompare);
 
                 std::string nodeInfo;
                 {
@@ -164,9 +172,25 @@ namespace rocRoller
                     }
                 }
 
-                auto table = kgraph.control.nodeOrderTableString(allNodes);
+                std::string splitInfo;
+                {
+                    std::ostringstream msg;
+                    if(!validSplits.empty())
+                        msg << "Splits: ";
+                    for(auto split : validSplits)
+                    {
+                        msg << "{";
+                        streamJoin(msg, split.begin, ", ");
+                        msg << "} -> {";
+                        streamJoin(msg, split.end, ", ");
+                        msg << "}\n";
+                    }
+                    splitInfo = msg.str();
+                }
 
-                return fmt::format("Nodes {{{}}}\n{}", nodeInfo, table);
+                auto table = kgraph.control.nodeOrderTableString(allNodes_);
+
+                return fmt::format("Nodes {{{}}}\n{}\n{}", nodeInfo, table, splitInfo);
             }
 
             std::set<int> TagExtent::allNodes() const
@@ -374,37 +398,12 @@ namespace rocRoller
                 return rv;
             }
 
-            TagExtent getExtent(KernelGraph const& kgraph, std::vector<Record> const& records)
+            std::vector<GraphExtent> getLivenessGaps(KernelGraph const& kgraph,
+                                                     TagRWGraph const&  ordering)
             {
+                std::vector<GraphExtent> rv;
+
                 using Tracer = ControlFlowRWTracer;
-
-                TagExtent rv;
-
-                if(records.empty())
-                {
-                    return rv;
-                }
-
-                rv = getInfo(kgraph, records);
-
-                auto ordering = getOrdering(kgraph, records);
-
-                {
-                    std::ofstream file("order_graph.dot");
-                    file << ordering.toDOT();
-                }
-
-                auto logger = Log::getLogger();
-                if(logger->should_log(LogLevel::Trace))
-                    logger->trace(ordering.toDOT());
-
-                auto getNode = [&](int idx) {
-                    auto rec = ordering.getNode(idx);
-                    return rec.control;
-                };
-
-                rv.extent.begin = ordering.roots().map(getNode).to<std::set>();
-                rv.extent.end   = ordering.leaves().map(getNode).to<std::set>();
 
                 auto isRead  = [&](int idx) { return ordering.getNode(idx).rw == Tracer::READ; };
                 auto isWrite = [&](int idx) { return ordering.getNode(idx).rw == Tracer::WRITE; };
@@ -429,7 +428,6 @@ namespace rocRoller
                             outgoing.size() == 1 && outgoing.contains(*writeIter),
                             "It doesn't make sense to have two unordered nodes that both write to "
                             "a register.",
-                            ShowValue(rv.toString()),
                             ShowValue(incoming),
                             ShowValue(outgoing));
 
@@ -442,28 +440,173 @@ namespace rocRoller
                             for(int out : outgoing)
                                 outControl.insert(ordering.getNode(out).control);
 
-                            auto forLoop = findContainingOperation<ControlGraph::ForLoopOp>(
-                                *incControl.begin(), kgraph);
-
-                            auto sameForLoop = [&](int node) {
-                                return findContainingOperation<ControlGraph::ForLoopOp>(node,
-                                                                                        kgraph)
-                                       == forLoop;
-                            };
-
-                            if(std::all_of(incControl.begin(), incControl.end(), sameForLoop)
-                               && std::all_of(outControl.begin(), outControl.end(), sameForLoop))
-                            {
-                                rv.gaps.emplace_back(std::move(incControl), std::move(outControl));
-                            }
+                            rv.emplace_back(std::move(incControl), std::move(outControl));
                         }
                     }
                 }
 
+                auto topoCompareExtents = [&](GraphExtent const& a, GraphExtent const& b) {
+                    AssertFatal(!a.begin.empty());
+                    AssertFatal(!b.begin.empty());
+
+                    return kgraph.control.compareNodes(
+                               rocRoller::UpdateCache, *a.begin.begin(), *b.begin.begin())
+                           == ControlGraph::NodeOrdering::LeftFirst;
+                };
+
+                std::sort(rv.begin(), rv.end(), topoCompareExtents);
+
                 return rv;
             }
 
-            bool TagExtent::fitsWithin(KernelGraph const& kgraph, TagExtent const& outer)
+            TagExtent getExtent(KernelGraph const& kgraph, std::vector<Record> const& records)
+            {
+                using Tracer = ControlFlowRWTracer;
+
+                TagExtent rv;
+
+                if(records.empty())
+                {
+                    return rv;
+                }
+
+                rv = getInfo(kgraph, records);
+
+                auto ordering = getOrdering(kgraph, records);
+                rv.graph      = ordering;
+
+                {
+                    std::ofstream file(fmt::format("order_graph_{}.dot", rv.baseTag));
+                    file << ordering.toDOT();
+                }
+
+                auto logger = Log::getLogger();
+                if(logger->should_log(LogLevel::Trace))
+                    logger->trace(ordering.toDOT());
+
+                auto getNode = [&](int idx) {
+                    auto rec = ordering.getNode(idx);
+                    return rec.control;
+                };
+
+                rv.extent.begin = ordering.roots().map(getNode).to<std::set>();
+                rv.extent.end   = ordering.leaves().map(getNode).to<std::set>();
+
+                auto isRead  = [&](int idx) { return ordering.getNode(idx).rw == Tracer::READ; };
+                auto isWrite = [&](int idx) { return ordering.getNode(idx).rw == Tracer::WRITE; };
+
+                auto allGaps = getLivenessGaps(kgraph, ordering);
+
+                // Find gaps that can contain an alias.
+                for(auto const& gap : allGaps)
+                {
+                    auto forLoop = findContainingOperation<ControlGraph::ForLoopOp>(
+                        *gap.begin.begin(), kgraph);
+
+                    auto sameForLoop = [&](int node) {
+                        return findContainingOperation<ControlGraph::ForLoopOp>(node, kgraph)
+                               == forLoop;
+                    };
+
+                    if(std::ranges::all_of(gap.begin, sameForLoop)
+                       && std::ranges::all_of(gap.end, sameForLoop))
+                    {
+                        rv.gaps.push_back(gap);
+                    }
+                }
+
+                auto inForLoop = [&](int node) {
+                    return findContainingOperation<ControlGraph::ForLoopOp>(node, kgraph)
+                           != std::nullopt;
+                };
+
+                // Find if we can split this tag from the beginning.
+
+                // Beginning of tag must be outside a loop.
+                if(std::ranges::none_of(rv.extent.begin, inForLoop))
+                {
+                    GraphExtent splitA{rv.extent.begin, {}};
+                    GraphExtent splitB{{}, rv.extent.end};
+                    for(auto const& gap : allGaps)
+                    {
+                        AssertFatal(!gap.begin.empty());
+                        AssertFatal(!gap.end.empty());
+
+                        if(std::ranges::none_of(gap.begin, inForLoop)
+                           && std::ranges::all_of(gap.end, inForLoop))
+                        {
+                            splitA.end   = gap.begin;
+                            splitB.begin = gap.end;
+                            break;
+                        }
+
+                        if(std::ranges::any_of(gap.begin, inForLoop)
+                           || std::ranges::any_of(gap.end, inForLoop))
+                            break;
+                    }
+
+                    if(!splitA.end.empty())
+                    {
+                        rv.validSplits.emplace_back(std::move(splitA));
+                        rv.validSplits.emplace_back(std::move(splitB));
+                    }
+                }
+
+                // auto writes = ordering.getNodes().filter(isWrite).to<std::set>();
+
+                // for(auto writeIter = writes.begin(); writeIter != writes.end(); writeIter++)
+                // {
+                //     auto incoming = ordering.getInputNodeIndices<Edge>(*writeIter).to<std::set>();
+
+                //     if(!incoming.empty() && std::all_of(incoming.begin(), incoming.end(), isRead))
+                //     {
+                //         std::set<int> outgoing;
+
+                //         for(int inc : incoming)
+                //         {
+                //             auto incOutgoing = ordering.getOutputNodeIndices<Edge>(inc);
+                //             outgoing.insert(incOutgoing.begin(), incOutgoing.end());
+                //         }
+
+                //         AssertFatal(
+                //             outgoing.size() == 1 && outgoing.contains(*writeIter),
+                //             "It doesn't make sense to have two unordered nodes that both write to "
+                //             "a register.",
+                //             ShowValue(rv.toString()),
+                //             ShowValue(incoming),
+                //             ShowValue(outgoing));
+
+                //         if(std::all_of(outgoing.begin(), outgoing.end(), isWrite))
+                //         {
+                //             std::set<int> incControl, outControl;
+                //             for(int inc : incoming)
+                //                 incControl.insert(ordering.getNode(inc).control);
+
+                //             for(int out : outgoing)
+                //                 outControl.insert(ordering.getNode(out).control);
+
+                //             auto forLoop = findContainingOperation<ControlGraph::ForLoopOp>(
+                //                 *incControl.begin(), kgraph);
+
+                //             auto sameForLoop = [&](int node) {
+                //                 return findContainingOperation<ControlGraph::ForLoopOp>(node,
+                //                                                                         kgraph)
+                //                        == forLoop;
+                //             };
+
+                //             if(std::all_of(incControl.begin(), incControl.end(), sameForLoop)
+                //                && std::all_of(outControl.begin(), outControl.end(), sameForLoop))
+                //             {
+                //                 rv.gaps.emplace_back(std::move(incControl), std::move(outControl));
+                //             }
+                //         }
+                //     }
+                // }
+
+                return rv;
+            }
+
+            bool TagExtent::fitsWithin(KernelGraph const& kgraph, TagExtent const& outer) const
             {
                 for(auto const& gap : outer.gaps)
                     if(extent.isWithin(kgraph, gap))
@@ -531,6 +674,7 @@ namespace rocRoller
                         groupedExtents[extent.typeKey()].push_back(std::move(extent));
                     }
                 }
+
                 return groupedExtents;
             }
 
@@ -579,6 +723,22 @@ namespace rocRoller
                     ext.validate(kgraph);
                 }
 
+                {
+                    std::set<int> nodes;
+
+                    for(auto const& extent: extents)
+                    {
+                        auto myNodes = extent.allNodes();
+                        nodes.insert(myNodes.begin(), myNodes.end());
+                    }
+
+                    // Log::debug(rocRoller::toString(nodes));
+
+                    Log::debug("\n{}", kgraph.control.nodeOrderTableString(nodes));
+
+                }
+
+
                 return aliases;
             }
 
@@ -592,7 +752,7 @@ namespace rocRoller
                 for(auto& [typeKey, extents] : groupedExtents)
                 {
                     auto logger = Log::getLogger();
-                    if(logger->should_log(LogLevel::Debug))
+                    if(logger->should_log(LogLevel::Critical))
                     {
                         std::ostringstream msg;
                         streamJoinTuple(msg, ", ", typeKey);
@@ -621,17 +781,143 @@ namespace rocRoller
                 return aliases;
             }
 
+            std::map<int, std::vector<GraphExtent>> findSplitCandidates(KernelGraph const& kgraph)
+            {
+                auto groupedExtents = getGroupedTagExtents(kgraph);
+
+                std::map<int, std::vector<GraphExtent>> rv;
+
+                for(auto const& [key, extents] : groupedExtents)
+                {
+                    for(auto const& extent : extents)
+                    {
+                        if(!extent.validSplits.empty())
+                        {
+                            AssertFatal(extent.validSplits.size() >= 2,
+                                        ShowValue(extent.validSplits.size()));
+                            AssertFatal(!rv.contains(extent.baseTag), ShowValue(extent.baseTag));
+
+                            rv[extent.baseTag] = extent.validSplits;
+                        }
+                    }
+                }
+
+                return rv;
+            }
+
+            bool GraphExtent::contains(KernelGraph const& kgraph, int opTag) const
+            {
+                if(begin.contains(opTag) || end.contains(opTag))
+                    return true;
+
+                auto afterOp = [&](int otherOp) {
+                    return kgraph.control.compareNodes(UpdateCache, opTag, otherOp)
+                           == ControlGraph::NodeOrdering::LeftFirst;
+                };
+
+                auto beforeOp = [&](int otherOp) {
+                    return kgraph.control.compareNodes(UpdateCache, opTag, otherOp)
+                           == ControlGraph::NodeOrdering::RightFirst;
+                };
+
+                return std::ranges::all_of(begin, beforeOp) && std::ranges::all_of(end, afterOp);
+            }
+
+            void moveMapperConnections(KernelGraph& kgraph, int opTag, int newDim, int oldDim)
+            {
+                auto connections = kgraph.mapper.getConnections(opTag);
+                for(auto& connection : connections)
+                {
+                    if(connection.coordinate == oldDim)
+                        connection.coordinate = newDim;
+                }
+
+                kgraph.mapper.purge(opTag);
+
+                for(auto const& connection : connections)
+                {
+                    kgraph.mapper.connect(
+                        connection.control, connection.coordinate, connection.connection);
+                }
+            }
+
+            void applySplits(KernelGraph&                                   kgraph,
+                             std::map<int, std::vector<GraphExtent>> const& splits)
+            {
+                ControlFlowRWTracer tracer(kgraph);
+
+                for(auto const& [dimension, dimSplits] : splits)
+                {
+                    std::ostringstream msg;
+                    msg << "Splitting " << dimension << ": ";
+
+                    auto          dimRWs = tracer.coordinatesReadWrite(dimension);
+                    std::set<int> dimOps;
+                    for(auto const& record : dimRWs)
+                        dimOps.insert(record.control);
+
+                    auto splitIter = dimSplits.begin();
+                    AssertFatal(splitIter != dimSplits.end());
+                    ++splitIter;
+                    AssertFatal(splitIter != dimSplits.end());
+
+                    for(; splitIter != dimSplits.end(); ++splitIter)
+                    {
+                        auto newDim = kgraph.coordinates.addElement(
+                            kgraph.coordinates.getElement(dimension));
+                        kgraph.coordinates.addElement(
+                            CoordinateGraph::Duplicate{}, {newDim}, {dimension});
+                        msg << " - Adding " << newDim << ": {";
+
+                        bool first = true;
+
+                        for(auto opIter = dimOps.begin(); opIter != dimOps.end();)
+                        {
+                            if(splitIter->contains(kgraph, *opIter))
+                            {
+                                if(!first)
+                                    msg << ", ";
+                                msg << *opIter;
+                                first = false;
+
+                                moveMapperConnections(kgraph, *opIter, newDim, dimension);
+                                opIter = dimOps.erase(opIter);
+                            }
+                            else
+                            {
+                                ++opIter;
+                            }
+                        }
+
+                        msg << "}" << std::endl;
+                    }
+
+                    msg << " - Remaining at " << dimension << ": ";
+                    streamJoin(msg, dimOps, ", ");
+                    msg << std::endl;
+
+                    Log::debug(msg.str());
+                }
+            }
         }
 
         KernelGraph AliasDataFlowTags::apply(KernelGraph const& original)
         {
             auto rv = original;
 
-            auto aliases = AliasDataFlowTagsDetail::findAliasCandidates(rv);
-
-            for(auto const& [inner, outer] : aliases)
             {
-                rv.coordinates.addElement(CoordinateGraph::Alias{}, {inner}, {outer});
+                auto splits = AliasDataFlowTagsDetail::findSplitCandidates(rv);
+
+                AliasDataFlowTagsDetail::applySplits(rv, splits);
+            }
+
+            {
+                auto aliases = AliasDataFlowTagsDetail::findAliasCandidates(rv);
+
+                for(auto const& [inner, outer] : aliases)
+                {
+                    rv.coordinates.addElement(CoordinateGraph::Alias{}, {inner}, {outer});
+                }
             }
 
             return rv;

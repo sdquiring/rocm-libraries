@@ -90,7 +90,7 @@ namespace rocRoller
 
             std::sort(loopLoads.begin(),
                       loopLoads.end(),
-                      TopologicalCompare(std::make_shared<KernelGraph>(graph)));
+                      TopologicalCompare(graph));
 
             std::optional<int> unrollKVal;
             std::optional<int> prevLoad;
@@ -164,7 +164,7 @@ namespace rocRoller
                 auto exchangeTags = copy.second;
                 std::sort(exchangeTags.begin(),
                           exchangeTags.end(),
-                          TopologicalCompare(std::make_shared<KernelGraph>(graph)));
+                          TopologicalCompare(graph));
                 insertBefore(graph, exchangeTags[0], copy.first, copy.first);
                 for(auto const exchangeTag : exchangeTags)
                     graph.control.addElement(Sequence(), {copy.first}, {exchangeTag});
@@ -562,7 +562,7 @@ namespace rocRoller
             // this brings the first load in the sequence to the front
             std::sort(loads.begin(),
                       loads.end(),
-                      TopologicalCompare(std::make_shared<KernelGraph>(graph)));
+                      TopologicalCompare(graph));
 
             auto colouring = colourByUnrollValue(graph);
 

@@ -239,7 +239,7 @@ namespace rocRoller::KernelGraph
     {
         auto tracer    = LastRWTracer(graph);
         auto locations = tracer.lastRWLocations();
-        auto topo      = TopologicalCompare(std::make_shared<KernelGraph>(graph));
+        auto topo      = TopologicalCompare(graph);
 
         // Map of <incoming Sequence edges to add, tags to deallocate>
         std::map<std::set<int>, std::vector<int>> deallocateNodesToAdd;
