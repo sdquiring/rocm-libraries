@@ -265,10 +265,12 @@ namespace rocRoller
             static constexpr bool HasValue = false;
             using BaseDimension::BaseDimension;
 
-            bool isDirect2LDS = false;
+            bool             isDirect2LDS = false;
+            std::vector<int> sizes;
 
             LDS();
             explicit LDS(bool const isDirect2LDS);
+            LDS(bool const isDirect2LDS, std::vector<int> const& sizes);
 
             std::string name() const override;
 

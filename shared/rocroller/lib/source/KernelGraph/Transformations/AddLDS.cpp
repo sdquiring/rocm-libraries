@@ -195,7 +195,7 @@ namespace rocRoller
                                 "Store D via LDS is not supported by SwizzleScale");
 
                 // Create new coordinates
-                auto              ldsTag      = k.coordinates.addElement(LDS(isDirect2LDS));
+                auto              ldsTag = k.coordinates.addElement(LDS(isDirect2LDS, tile.sizes));
                 std::vector<uint> jammedTiles = {1, 1};
                 bool              splitStore  = false;
 

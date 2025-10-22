@@ -385,7 +385,7 @@ namespace rocRoller
                                 rv.layoutType = mt.layoutType;
                         },
                         [&](CoordinateGraph::LDS const& lds) {
-                            rv.sizes      = {1};
+                            rv.sizes      = lds.sizes;
                             rv.memoryType = MemoryType::LDS;
                         },
                         [&](auto const& node) {
