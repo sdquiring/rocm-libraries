@@ -64,11 +64,12 @@ namespace rocRoller::KernelGraph
         std::unordered_map<int, std::unordered_set<int>> predecessors;
         std::unordered_map<int, std::vector<int>>        successors;
 
-        for(auto const node : graph.control.getNodes())
+        for(auto const node : graph.control.getNodes().to<std::vector>())
         {
             predecessors[node];
             successors[node];
-            for(auto const parent : graph.control.getInputNodeIndices<Sequence>(node))
+            for(auto const parent :
+                graph.control.getInputNodeIndices<Sequence>(node).to<std::vector>())
             {
                 if(predecessors.at(node).contains(parent))
                 {
@@ -130,11 +131,27 @@ namespace rocRoller::KernelGraph
             }
         }
 
-        // TODO: sorting in unnecessary as we just want to know the maximum depth among successors
+        // TODO: sorting is unnecessary as we just want to know the maximum depth among successors
         for(auto& [node, children] : successors)
+        {
+            {
+                std::set<int> unknownDepth;
+                for(auto ch : children)
+                    if(!depth.contains(ch))
+                        unknownDepth.insert(ch);
+
+                if(!unknownDepth.empty())
+                {
+                    std::ofstream file("before_throw.dot");
+                    file << graph.control.toDOT();
+                    AssertFatal(unknownDepth.empty(), ShowValue(unknownDepth), ShowValue(node), ShowValue(children));
+                }
+            }
+
             std::sort(children.begin(), children.end(), [&](int a, int b) {
                 return depth.at(a) < depth.at(b);
             });
+        }
 
         std::vector<int>             round = std::move(roots);
         std::vector<int>             next_round;
@@ -274,10 +291,10 @@ namespace rocRoller::KernelGraph
 
         std::unordered_map<int, std::unordered_set<int>> bodyPredecessors;
 
-        for(auto const node : graph.control.getNodes())
+        for(auto const node : graph.control.getNodes().to<std::vector>())
         {
             bodyPredecessors[node];
-            for(auto const parent : graph.control.getInputNodeIndices<Body>(node))
+            for(auto const parent : graph.control.getInputNodeIndices<Body>(node).to<std::vector>())
             {
                 if(bodyPredecessors.at(node).contains(parent))
                 {
