@@ -28,6 +28,9 @@
 #include <rocRoller/KernelGraph/Utils.hpp>
 
 #include <rocRoller/Graph/GraphUtilities.hpp>
+#include <rocRoller/KernelGraph/Transforms/Simplify.hpp>
+
+// #define debug critical
 
 namespace rocRoller
 {
@@ -80,7 +83,12 @@ namespace rocRoller
                 for(auto node : group)
                     nodes.erase(node);
 
-                groupedNodes.push_back(std::move(group));
+                if(group.size() > 1)
+                    groupedNodes.push_back(std::move(group));
+                else
+                {
+                    Log::debug("{} is totally ordered.", *group.begin());
+                }
             }
 
             return groupedNodes;
@@ -121,7 +129,9 @@ namespace rocRoller
                 return std::vector(downstreamMemoryNodes.begin(), downstreamMemoryNodes.end());
             }();
 
-            std::sort(downstreamMemoryNodes.begin(), downstreamMemoryNodes.end(), TopologicalCompare(graph));
+            std::sort(downstreamMemoryNodes.begin(),
+                      downstreamMemoryNodes.end(),
+                      TopologicalCompare(graph));
 
             Log::debug("Memory: {}", ShowValue(downstreamMemoryNodes));
 
@@ -241,8 +251,6 @@ namespace rocRoller
 
             std::vector<std::vector<int>> groupedOrderedNodes;
 
-            std::vector<std::vector<std::vector<ControlToCoordinateMapper::Connection>>>
-                multiplyConnections;
 
             for(auto& group : groupedNodes)
             {
@@ -277,13 +285,35 @@ namespace rocRoller
         {
             auto rv = original;
 
-            for(auto const& group : findAndOrderGroups(original))
+            size_t n = 0;
+
+            do
             {
-                for(size_t idx = 0; idx + 1 < group.size(); idx++)
+                auto groups = findAndOrderGroups(rv);
+
+                n = groups.size();
+
+                for(auto const& group : groups)
                 {
-                    rv.control.chain<ControlGraph::Sequence>(group[idx], group[idx + 1]);
+                    for(size_t idx = 0; idx + 1 < group.size(); idx++)
+                    {
+                        auto order = rv.control.compareNodes(
+                            UseCacheIfAvailable, group[idx], group[idx + 1]);
+                        // AssertFatal(order == ControlGraph::NodeOrdering::Undefined
+                        //                 || order == ControlGraph::NodeOrdering::LeftFirst,
+                        //             ShowValue(order),
+                        //             ShowValue(group[idx]),
+                        //             ShowValue(group[idx + 1]),
+                        //             ShowValue(group));
+                        if(order == ControlGraph::NodeOrdering::Undefined)
+                            rv.control.chain<ControlGraph::Sequence>(group[idx], group[idx + 1]);
+                    }
                 }
-            }
+
+                Log::debug("Ordered {} groups", n);
+            } while(n > 0);
+
+            removeRedundantSequenceEdges(rv);
 
             return rv;
         }
