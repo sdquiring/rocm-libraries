@@ -1267,14 +1267,14 @@ def does_this_fail():
     )
 
 
-def fp4_small_example():
+def fp4_fast_example():
     yield GEMMRun(
         M=4096,
         N=4096,
         K=32768,
         beta=0.0,
-        mac_m=64,
-        mac_n=64,
+        mac_m=256,
+        mac_n=256,
         mac_k=256,
         wave_m=16,
         wave_n=16,
@@ -1290,7 +1290,7 @@ def fp4_small_example():
         loadLDSScale_B=False,
         storeLDS_D=False,
         prefetch=True,
-        prefetchInFlight=4,
+        prefetchInFlight=2,
         prefetchLDSFactor=1,
         prefetchScale=False,
         swizzleScale=False,
@@ -1318,6 +1318,10 @@ def fp4_small_example():
         numWarmUp=1000,
         numInner=1000,
     )
+
+
+def fp4_fast_example_wgm():
+    yield from add_wgm((0, 2), fp4_fast_example())
 
 
 def fp4_256_works_d2lds_mi16x16x128_pf4x1():
