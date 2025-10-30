@@ -26,6 +26,7 @@
 
 #include <rocRoller/InstructionValues/LDSAllocator.hpp>
 #include <rocRoller/Utilities/Error.hpp>
+#include <rocRoller/Utilities/Logging.hpp>
 #include <rocRoller/Utilities/Settings.hpp>
 #include <rocRoller/Utilities/Utils.hpp>
 
@@ -124,6 +125,8 @@ namespace rocRoller
         m_currentUsed += alignedSize;
 
         updateMaxUsed();
+
+        Log::critical("LDS: Allocated {} bytes. Current use: {}", size, currentUsed());
         return allocation;
     }
 
@@ -206,6 +209,8 @@ namespace rocRoller
                 m_consolidationDepth -= 1;
             }
         }
+
+        Log::critical("LDS: Freed {} bytes. Current use: {}", allocation->size(), currentUsed());
     }
 
     LDSAllocation::LDSAllocation(std::shared_ptr<LDSAllocator> allocator,
@@ -225,6 +230,7 @@ namespace rocRoller
 
     LDSAllocation::~LDSAllocation()
     {
+        // Log::critical("~LDSAllocation()");
         if(m_allocator.lock())
             m_allocator.lock()->deallocate(copyForAllocator());
     }
