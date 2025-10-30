@@ -31,8 +31,6 @@
 
 #include <rocRoller/Graph/GraphUtilities.hpp>
 
-#define debug critical
-
 namespace rocRoller
 {
     namespace KernelGraph
@@ -122,7 +120,7 @@ namespace rocRoller
             {
                 std::ostringstream msg;
 
-                msg << "Tag " << tags << " (" << dataType << " ";
+                msg << "Tag " << tags << " (" << memoryType << " " << dataType << " ";
                 rocRoller::streamJoin(msg, sizes, "x");
                 msg << "): " << extent << std::endl;
 
@@ -188,9 +186,26 @@ namespace rocRoller
                     splitInfo = msg.str();
                 }
 
+                std::string extraInfo;
+                {
+                    std::ostringstream msg;
+                    if(!extraGaps.empty())
+                        msg << "Extra: ";
+                    for(auto split : extraGaps)
+                    {
+                        msg << "{";
+                        streamJoin(msg, split.begin, ", ");
+                        msg << "} -> {";
+                        streamJoin(msg, split.end, ", ");
+                        msg << "}\n";
+                    }
+                    extraInfo = msg.str();
+                }
+
                 auto table = kgraph.control.nodeOrderTableString(allNodes_);
 
-                return fmt::format("Nodes {{{}}}\n{}\n{}", nodeInfo, table, splitInfo);
+                return fmt::format(
+                    "Nodes {{{}}}\n{}\n{}\n{}", nodeInfo, table, splitInfo, extraInfo);
             }
 
             std::set<int> TagExtent::allNodes() const
@@ -388,6 +403,10 @@ namespace rocRoller
                             rv.sizes      = lds.sizes;
                             rv.memoryType = MemoryType::LDS;
                         },
+                        [&](CoordinateGraph::WaveTile const& wt) {
+                            rv.sizes      = wt.sizes;
+                            rv.memoryType = MemoryType::Literal;
+                        },
                         [&](auto const& node) {
                             Throw<FatalError>("Unexpected Dimension: {}", toString(node));
                         }};
@@ -424,12 +443,12 @@ namespace rocRoller
                             outgoing.insert(incOutgoing.begin(), incOutgoing.end());
                         }
 
-                        AssertFatal(
-                            outgoing.size() == 1 && outgoing.contains(*writeIter),
-                            "It doesn't make sense to have two unordered nodes that both write to "
-                            "a register.",
-                            ShowValue(incoming),
-                            ShowValue(outgoing));
+                        // AssertFatal(
+                        //     outgoing.size() == 1 && outgoing.contains(*writeIter),
+                        //     "It doesn't make sense to have two unordered nodes that both write to "
+                        //     "a register.",
+                        //     ShowValue(incoming),
+                        //     ShowValue(outgoing));
 
                         if(std::all_of(outgoing.begin(), outgoing.end(), isWrite))
                         {
@@ -495,11 +514,15 @@ namespace rocRoller
                 auto isRead  = [&](int idx) { return ordering.getNode(idx).rw == Tracer::READ; };
                 auto isWrite = [&](int idx) { return ordering.getNode(idx).rw == Tracer::WRITE; };
 
-                auto allGaps = getLivenessGaps(kgraph, ordering);
+                auto             allGaps = getLivenessGaps(kgraph, ordering);
+                std::vector<int> used(allGaps.size(), 0);
 
                 // Find gaps that can contain an alias.
-                for(auto const& gap : allGaps)
+                // for(auto const& gap : allGaps)
+                for(int i = 0; i < allGaps.size(); i++)
                 {
+                    auto const& gap = allGaps.at(i);
+
                     auto forLoop = findContainingOperation<ControlGraph::ForLoopOp>(
                         *gap.begin.begin(), kgraph);
 
@@ -511,6 +534,7 @@ namespace rocRoller
                     if(std::ranges::all_of(gap.begin, sameForLoop)
                        && std::ranges::all_of(gap.end, sameForLoop))
                     {
+                        used[i] = 1;
                         rv.gaps.push_back(gap);
                     }
                 }
@@ -527,8 +551,11 @@ namespace rocRoller
                 {
                     GraphExtent splitA{rv.extent.begin, {}};
                     GraphExtent splitB{{}, rv.extent.end};
-                    for(auto const& gap : allGaps)
+                    // for(auto const& gap : allGaps)
+                    for(int i = 0; i < allGaps.size(); i++)
                     {
+                        auto const& gap = allGaps.at(i);
+
                         AssertFatal(!gap.begin.empty());
                         AssertFatal(!gap.end.empty());
 
@@ -537,6 +564,7 @@ namespace rocRoller
                         {
                             splitA.end   = gap.begin;
                             splitB.begin = gap.end;
+                            used[i]      = 1;
                             break;
                         }
 
@@ -550,6 +578,12 @@ namespace rocRoller
                         rv.validSplits.emplace_back(std::move(splitA));
                         rv.validSplits.emplace_back(std::move(splitB));
                     }
+                }
+
+                for(int i = 0; i < allGaps.size(); i++)
+                {
+                    if(!used[i])
+                        rv.extraGaps.push_back(allGaps[i]);
                 }
 
                 // auto writes = ordering.getNodes().filter(isWrite).to<std::set>();
@@ -615,6 +649,15 @@ namespace rocRoller
                 return false;
             }
 
+            template <typename T>
+            Generator<T> chain(Generator<T> a, Generator<T> b)
+            {
+                for(auto const& t : a)
+                    co_yield t;
+                for(auto const& t : b)
+                    co_yield t;
+            }
+
             std::map<TagExtent::CategoryKey, std::list<TagExtent>>
                 getGroupedTagExtents(KernelGraph const& kgraph)
             {
@@ -635,8 +678,16 @@ namespace rocRoller
                     }
                 }
 
-                for(auto mt : kgraph.coordinates.getNodes<CoordinateGraph::MacroTile>())
+                std::unordered_set<int> alreadySeen;
+
+                for(auto mt : chain(kgraph.coordinates.getNodes<CoordinateGraph::MacroTile>(),
+                                    kgraph.coordinates.getNodes<CoordinateGraph::WaveTile>()))
                 {
+                    if(alreadySeen.contains(mt))
+                        continue;
+
+                    alreadySeen.insert(mt);
+
                     auto isView = [&](auto const& edge) {
                         auto const* dfe = std::get_if<CoordinateGraph::DataFlowEdge>(&edge);
                         return dfe && std::holds_alternative<CoordinateGraph::View>(*dfe);
@@ -656,6 +707,8 @@ namespace rocRoller
                         AssertFatal(outViews.empty(),
                                     "Both in and out view edges are not supported.");
                     }
+
+                    alreadySeen.insert(outViews.begin(), outViews.end());
 
                     auto records = tracer.coordinatesReadWrite(mt);
 
@@ -726,7 +779,7 @@ namespace rocRoller
                 {
                     std::set<int> nodes;
 
-                    for(auto const& extent: extents)
+                    for(auto const& extent : extents)
                     {
                         auto myNodes = extent.allNodes();
                         nodes.insert(myNodes.begin(), myNodes.end());
@@ -735,9 +788,7 @@ namespace rocRoller
                     // Log::debug(rocRoller::toString(nodes));
 
                     Log::debug("\n{}", kgraph.control.nodeOrderTableString(nodes));
-
                 }
-
 
                 return aliases;
             }

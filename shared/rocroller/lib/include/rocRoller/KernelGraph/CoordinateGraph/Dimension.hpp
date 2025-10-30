@@ -350,7 +350,7 @@ namespace rocRoller
             std::vector<int> sizes;
 
             /**
-             * Size of thread tiles.
+         * Size of thread tiles.
              *
              * Sizes of -1 represent a "to be determined size".
              */

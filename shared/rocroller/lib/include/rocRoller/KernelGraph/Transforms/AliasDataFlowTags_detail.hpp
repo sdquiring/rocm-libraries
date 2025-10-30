@@ -123,6 +123,7 @@ namespace rocRoller
 
                 std::vector<GraphExtent> gaps;
                 std::vector<GraphExtent> validSplits;
+                std::vector<GraphExtent> extraGaps;
 
                 TagRWGraph graph;
 
