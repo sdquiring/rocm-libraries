@@ -364,7 +364,8 @@ namespace rocRoller
             CommandParametersPtr m_params;
             ContextPtr           m_context;
 
-            void trackStores(KernelGraph const& graph, int start);
+            std::map<int, rocRoller::LayoutType> m_operationToLayout;
+            void                                 trackStores(KernelGraph const& graph, int start);
         };
 
         void AddBarrierVisitor::stage(KernelGraph const& graph, int opTag)
@@ -566,6 +567,10 @@ namespace rocRoller
 
         void AddPrefetchVisitor::commitForLoop(KernelGraph& graph, int forLoop, int numUnroll)
         {
+            using LayoutTypeToBarrier = std::unordered_map<rocRoller::LayoutType, int>;
+
+            LayoutTypeToBarrier barriers;
+
             auto logger = rocRoller::Log::getLogger();
             logger->debug("KernelGraph::AddPrefetch()::commitForLoop({})", forLoop);
 
@@ -656,7 +661,11 @@ namespace rocRoller
             }
             graph.control.addElement(Sequence(), {preChain.back()}, {preBarrier});
 
-            auto addLDSPrefetchChains = [&](int u, int pre, int post, bool duplicate) -> int {
+            auto addLDSPrefetchChains = [&](int                  u,
+                                            int                  pre,
+                                            int                  post,
+                                            LayoutTypeToBarrier& barriers,
+                                            bool                 duplicate) -> int {
                 std::vector<int> prefetchChain;
                 for(auto [_ignore1, _ignore2, chain] : m_prefetchFromLDSChains[forLoop][u])
                 {
@@ -666,20 +675,37 @@ namespace rocRoller
 
                 AssertFatal(!prefetchChain.empty());
 
-                logger->debug("  prefetch: lds prefetch: ordering {} to {} (top)",
+                auto lastLayout     = m_operationToLayout[prefetchChain.front()];
+                auto inlineBarriers = not barriers.empty();
+
+                logger->debug("  prefetch: lds prefetch: ordering {} to {} {} (top)",
                               pre,
-                              prefetchChain.front());
+                              prefetchChain.front(),
+                              toString(m_operationToLayout[prefetchChain.front()]));
                 graph.control.addElement(Sequence(), {pre}, {prefetchChain.front()});
                 for(uint i = 1; i < prefetchChain.size(); ++i)
                 {
-                    logger->debug("  prefetch: lds prefetch: ordering {} to {} (chain)",
+                    logger->debug("  prefetch: lds prefetch: ordering {} to {} {} (chain)",
                                   prefetchChain[i - 1],
-                                  prefetchChain[i]);
-                    graph.control.addElement(
-                        Sequence(), {prefetchChain[i - 1]}, {prefetchChain[i]});
+                                  prefetchChain[i],
+                                  toString(m_operationToLayout[prefetchChain[i]]));
+                    if(inlineBarriers && lastLayout != m_operationToLayout[prefetchChain[i]])
+                    {
+                        lastLayout   = m_operationToLayout[prefetchChain[i]];
+                        auto barrier = barriers[lastLayout];
+                        graph.control.addElement(Sequence(), {prefetchChain[i - 1]}, {barrier});
+                        graph.control.addElement(Sequence(), {barrier}, {prefetchChain[i]});
+                        logger->debug("  prefetch: lds prefetch: *inlined-barrier* {}", barrier);
+                    }
+                    else
+                    {
+                        graph.control.addElement(
+                            Sequence(), {prefetchChain[i - 1]}, {prefetchChain[i]});
+                    }
                 }
-                logger->debug("  prefetch: lds prefetch: ordering {} to {} (bottom)",
+                logger->debug("  prefetch: lds prefetch: ordering {} {} to {} (bottom)",
                               prefetchChain.back(),
+                              toString(m_operationToLayout[prefetchChain.back()]),
                               post);
                 graph.control.addElement(Sequence(), {prefetchChain.back()}, {post});
 
@@ -687,7 +713,7 @@ namespace rocRoller
             };
 
             if(!m_prefetchFromLDSChains[forLoop].empty())
-                addLDSPrefetchChains(0, preBarrier, preNOP, true);
+                addLDSPrefetchChains(0, preBarrier, preNOP, barriers, true);
             graph.control.addElement(Sequence(), {preBarrier}, {preNOP});
 
             //
@@ -768,6 +794,38 @@ namespace rocRoller
                 auto ldsPrefetchU    = (u + 1) % numUnroll;
                 auto barrier         = graph.control.addElement(Barrier());
 
+                // Create Layout <-> Barrier mapping.
+                //
+                // The barrier for MATRIX_A is the barrier that was
+                // created just above.  This barrier is explicitly
+                // connected below.
+                //
+                // The barrier for MATRIX_B is created here but left
+                // dangling.  The MATRIX_B barrier is connected in the
+                // addLDSPrefetchChains helper.
+                //
+                // If you leave the `barriers` mapping empty; then
+                // everything is simply connected to the barrier
+                // crated above.
+                if(false)
+                {
+                    barriers.clear();
+                    barriers[rocRoller::LayoutType::MATRIX_A] = barrier;
+                    barriers[rocRoller::LayoutType::MATRIX_B] = graph.control.addElement(Barrier());
+                }
+
+                //
+                // This helper connects Barries to LDS coordinates.
+                //
+                // It receives a StoreLDSTile operation.
+                //
+                auto setBarrier = [&](int op, int sd) {
+                    auto ldsTileTag = graph.mapper.get<LDS>(op);
+                    auto barrierTag
+                        = barriers.empty() ? barrier : barriers.at(m_operationToLayout.at(op));
+                    graph.mapper.connect<LDS>(barrierTag, ldsTileTag, sd);
+                };
+
                 auto nop = separateMemOps ? graph.control.addElement(NOP()) : -1;
 
                 // Issue global loads
@@ -832,8 +890,7 @@ namespace rocRoller
                               ldsPrefetchU,
                               globalStores[0].user);
 
-                auto ldsTileTag = graph.mapper.get<LDS>(globalStores[0].ldsChain);
-                graph.mapper.connect<LDS>(barrier, ldsTileTag, 0);
+                setBarrier(globalStores[0].ldsChain, 0);
 
                 for(int i = 1; i < globalStores.size(); i++)
                 {
@@ -849,8 +906,7 @@ namespace rocRoller
                                   ldsPrefetchU,
                                   globalStores[i].user);
 
-                    auto ldsTileTag = graph.mapper.get<LDS>(globalStores[i].ldsChain);
-                    graph.mapper.connect<LDS>(barrier, ldsTileTag, i);
+                    setBarrier(globalStores[i].ldsChain, i);
                 }
 
                 // overlap the direct2lds and load lds when they do not access the same LDS allocation
@@ -874,7 +930,7 @@ namespace rocRoller
                     {
                         graph.control.addElement(Body(), {*singleIncomingBody}, {barrier});
                         logger->debug("  prefetch: in-loop: prefetchDirect2LDS && mixMemOps: "
-                                      "operation {} containes barrier {} in body",
+                                      "operation {} contains barrier {} in body",
                                       *singleIncomingBody,
                                       barrier);
                     }
@@ -912,7 +968,7 @@ namespace rocRoller
                 if(m_prefetchFromLDSChains[forLoop].contains(ldsPrefetchU))
                 {
                     firstPrefetchFromLDS = addLDSPrefetchChains(
-                        ldsPrefetchU, barrier, segmentBoundaries[u + 1], false);
+                        ldsPrefetchU, barrier, segmentBoundaries[u + 1], barriers, false);
                 }
                 else
                 {
@@ -1087,6 +1143,28 @@ namespace rocRoller
 
             auto colouring       = colourByUnrollValue(k);
             auto isBodyPredicate = k.control.isElemType<Body>();
+
+            // Build map from operation to LayoutType.
+            {
+                auto predicate = [&](int x) {
+                    return k.control.get<LoadTiled>(x).has_value()
+                           || k.control.get<LoadLDSTile>(x).has_value()
+                           || k.control.get<StoreLDSTile>(x).has_value();
+                };
+
+                for(auto [forLoop, numUnroll] : m_prefetchLoops)
+                {
+                    auto bodyEdges
+                        = filter(isBodyPredicate, k.control.getNeighbours<GD::Downstream>(forLoop))
+                              .to<std::vector>();
+                    for(auto op : k.control.findNodes(bodyEdges, predicate, GD::Downstream))
+                    {
+                        auto [tileTag, tile]    = k.getDimension<MacroTile>(op);
+                        m_operationToLayout[op] = tile.layoutType;
+                        m_operationToLayout[getTopSetCoordinate(k, op)] = tile.layoutType;
+                    }
+                }
+            }
 
             std::map<int, int> unrollCoordSizes;
             {

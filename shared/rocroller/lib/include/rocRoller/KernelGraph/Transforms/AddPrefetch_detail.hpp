@@ -39,10 +39,10 @@ namespace rocRoller::KernelGraph
         struct LDSOperationInfo
         {
             int user; // User coordinate
-            int globalOperation; // LoadTiled/StoreTiled operation
-            int ldsOperation; // StoreLDSTile/LoadLDSTile operation
-            int globalChain; // LoadTiled/StoreTiled operation
-            int ldsChain; // StoreLDStile/LoadLDSTile operation
+            int globalOperation; // LoadTiled/StoreTiled operation (actual operation)
+            int ldsOperation; // StoreLDSTile/LoadLDSTile operation (actual operation)
+            int globalChain; // LoadTiled/StoreTiled operation (top SetCoordinate)
+            int ldsChain; // StoreLDStile/LoadLDSTile operation (top SetCoordinate)
         };
 
         /**
