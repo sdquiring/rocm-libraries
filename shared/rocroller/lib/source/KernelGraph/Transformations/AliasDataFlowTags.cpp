@@ -665,18 +665,18 @@ namespace rocRoller
 
                 ControlFlowRWTracer tracer(kgraph);
 
-                for(auto lds : kgraph.coordinates.getNodes<CoordinateGraph::LDS>())
-                {
-                    auto records = tracer.coordinatesReadWrite(lds);
+                // for(auto lds : kgraph.coordinates.getNodes<CoordinateGraph::LDS>())
+                // {
+                //     auto records = tracer.coordinatesReadWrite(lds);
 
-                    auto extent = getExtent(kgraph, records);
+                //     auto extent = getExtent(kgraph, records);
 
-                    if(!extent.empty() && extent.dataType != DataType::None
-                       && extent.layoutType != LayoutType::MATRIX_ACCUMULATOR)
-                    {
-                        groupedExtents[extent.typeKey()].push_back(std::move(extent));
-                    }
-                }
+                //     if(!extent.empty() && extent.dataType != DataType::None
+                //        && extent.layoutType != LayoutType::MATRIX_ACCUMULATOR)
+                //     {
+                //         groupedExtents[extent.typeKey()].push_back(std::move(extent));
+                //     }
+                // }
 
                 std::unordered_set<int> alreadySeen;
 

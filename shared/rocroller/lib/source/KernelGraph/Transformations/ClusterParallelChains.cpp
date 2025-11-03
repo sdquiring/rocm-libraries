@@ -30,7 +30,7 @@
 #include <rocRoller/Graph/GraphUtilities.hpp>
 #include <rocRoller/KernelGraph/Transforms/Simplify.hpp>
 
-#define debug critical
+#define debug debug
 
 namespace rocRoller
 {
@@ -43,6 +43,11 @@ namespace rocRoller
         vec2 makeChains(KernelGraph const& graph, std::vector<int> nodes)
         {
             std::ranges::sort(nodes, TopologicalCompare(graph));
+            Log::debug("makeChains({})", ShowValue(nodes));
+
+            auto isBarrier = [&](int idx) -> bool {
+                return graph.control.get<ControlGraph::Barrier>(idx).has_value();
+            };
 
             for(int i = 0; i + 1 < nodes.size(); i++)
             {
@@ -64,10 +69,29 @@ namespace rocRoller
 
             for(int i = 1; i < nodes.size(); i++)
             {
+                // The current chain can continue if
+                // - There is a direct sequence edge between the last element and the current one, or
+                // - There is a Barrier node directly between them.
+
                 if(!graph.control.findEdge(currentChain.back(), nodes[i]))
                 {
-                    rv.push_back(std::move(currentChain));
-                    currentChain.clear();
+                    // auto barrier
+                    //     = graph.control
+                    //           .getOutputNodeIndices<ControlGraph::Sequence>(currentChain.back())
+                    //           .filter(isBarrier)
+                    //           .only();
+
+                    // if(barrier
+                    //    && !graph.control.getOutputNodeIndices<ControlGraph::Sequence>(*barrier)
+                    //            .filter([&nodes, &i](int x) { return x == nodes[i]; })
+                    //            .empty())
+                    // {
+                    // }
+                    // else
+                    {
+                        rv.push_back(std::move(currentChain));
+                        currentChain.clear();
+                    }
                 }
 
                 currentChain.push_back(nodes[i]);
@@ -89,6 +113,23 @@ namespace rocRoller
             return makeChains(graph, std::move(multiplies));
         }
 
+        void getImmediateBodyParents(KernelGraph const& graph, std::vector<int>& nodes)
+        {
+            auto isSetCoordinate = [&](int idx) -> bool {
+                return graph.control.get<ControlGraph::SetCoordinate>(idx).has_value();
+            };
+
+            for(auto& node : nodes)
+            {
+                while(auto bodyParent = graph.control.getInputNodeIndices<ControlGraph::Body>(node)
+                                            .filter(isSetCoordinate)
+                                            .only())
+                {
+                    node = *bodyParent;
+                }
+            }
+        }
+
         vec2 findLoadLDSChains(KernelGraph const& graph)
         {
             auto isLoadLDSTile = [&](int idx) -> bool {
@@ -96,15 +137,31 @@ namespace rocRoller
             };
 
             auto nodes = graph.control.getNodes().filter(isLoadLDSTile).to<std::vector>();
+            getImmediateBodyParents(graph, nodes);
 
-            for(auto& node : nodes)
-            {
-                while(auto bodyParent
-                      = graph.control.getInputNodeIndices<ControlGraph::Body>(node).only())
-                {
-                    node = *bodyParent;
-                }
-            }
+            return makeChains(graph, std::move(nodes));
+        }
+
+        vec2 findLoadTiledChains(KernelGraph const& graph)
+        {
+            auto isLoadTiled = [&](int idx) -> bool {
+                return graph.control.get<ControlGraph::LoadTiled>(idx).has_value();
+            };
+
+            auto nodes = graph.control.getNodes().filter(isLoadTiled).to<std::vector>();
+            getImmediateBodyParents(graph, nodes);
+
+            return makeChains(graph, std::move(nodes));
+        }
+
+        vec2 findD2LDSChains(KernelGraph const& graph)
+        {
+            auto isD2LDS = [&](int idx) -> bool {
+                return graph.control.get<ControlGraph::LoadTileDirect2LDS>(idx).has_value();
+            };
+
+            auto nodes = graph.control.getNodes().filter(isD2LDS).to<std::vector>();
+            getImmediateBodyParents(graph, nodes);
 
             return makeChains(graph, std::move(nodes));
         }
@@ -176,11 +233,11 @@ namespace rocRoller
 
                             if(myStack.back() != aStack.back())
                             {
-                                Log::critical("{} can't join {} due to different parents ({}/{})",
-                                              myNode,
-                                              aNode,
-                                              myStack.back(),
-                                              aStack.back());
+                                Log::debug("{} can't join {} due to different parents ({}/{})",
+                                           myNode,
+                                           aNode,
+                                           myStack.back(),
+                                           aStack.back());
                                 canJoin = false;
                                 break;
                             }
@@ -188,10 +245,10 @@ namespace rocRoller
                             auto order = graph.control.compareNodes(UpdateCache, myNode, aNode);
                             if(order != ControlGraph::NodeOrdering::Undefined)
                             {
-                                Log::critical("{} can't join {} due to defined order ({})",
-                                              myNode,
-                                              aNode,
-                                              toString(order));
+                                Log::debug("{} can't join {} due to defined order ({})",
+                                           myNode,
+                                           aNode,
+                                           toString(order));
                                 canJoin = false;
                                 break;
                             }
@@ -226,11 +283,26 @@ namespace rocRoller
         {
             auto multiplyChains = findMultiplyChains(graph);
             auto ldsChains      = findLoadLDSChains(graph);
+            // auto loadChains     = findLoadTiledChains(graph);
 
-            Log::critical("Multiply chains: \n{}", showChains(multiplyChains));
-            Log::critical("LDS chains: \n{}", showChains(ldsChains));
+            Log::debug("Multiply chains: \n{}", showChains(multiplyChains));
+            Log::debug("LDS chains: \n{}", showChains(ldsChains));
+            // Log::debug("LoadTiled chains: \n{}", showChains(loadChains));
 
             return identifyParallelChains(graph, {std::move(multiplyChains), std::move(ldsChains)});
+        }
+
+        vec3 identifyParallelMultiplyAndD2LDSChains(KernelGraph const& graph)
+        {
+            auto multiplyChains = findMultiplyChains(graph);
+            auto d2ldsChains    = findD2LDSChains(graph);
+
+            Log::debug("Multiply chains: \n{}", showChains(multiplyChains));
+            Log::debug("D2LDS chains: \n{}", showChains(d2ldsChains));
+            // Log::debug("LoadTiled chains: \n{}", showChains(loadChains));
+
+            return identifyParallelChains(graph,
+                                          {std::move(multiplyChains), std::move(d2ldsChains)});
         }
 
         void clusterParallelChains(KernelGraph& graph, vec3 const& groups, int factor)
@@ -281,12 +353,13 @@ namespace rocRoller
 
                     for(size_t clusterIdx = 0; clusterIdx < group.size(); clusterIdx++)
                     {
-                        auto endIdx = idxs[clusterIdx] + clusterSizes[clusterIdx];
+                        auto endIdx  = idxs[clusterIdx] + clusterSizes[clusterIdx];
                         auto lastIdx = endIdx - 1;
 
                         if(lastIdx < group[clusterIdx].size())
                         {
-                            graph.control.chain<ControlGraph::Sequence>(group[clusterIdx][lastIdx], *nop);
+                            graph.control.chain<ControlGraph::Sequence>(group[clusterIdx][lastIdx],
+                                                                        *nop);
 
                             anyLeft = true;
                         }
@@ -302,12 +375,23 @@ namespace rocRoller
         {
             auto rv = original;
 
-            Log::critical("lksjflskdj");
+            Log::debug("lksjflskdj");
 
-            auto groups = identifyParallelMultiplyAndLDSChains(rv);
-            Log::critical(showGroups(groups));
+            {
+                auto groups = identifyParallelMultiplyAndD2LDSChains(rv);
+                Log::debug(showGroups(groups));
 
-            clusterParallelChains(rv, groups, 4);
+                clusterParallelChains(rv, groups, 1);
+            }
+
+            removeRedundantSequenceEdges(rv);
+
+            {
+                auto groups = identifyParallelMultiplyAndLDSChains(rv);
+                Log::debug(showGroups(groups));
+
+                clusterParallelChains(rv, groups, 1);
+            }
 
             return rv;
         }

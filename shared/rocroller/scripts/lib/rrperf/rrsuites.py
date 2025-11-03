@@ -1160,6 +1160,66 @@ def fp4_target_d2lds_mi32x32x64_pf4x1_both():
     yield from fp4_target_d2lds_mi32x32x64_pf4x1_wgm()
 
 
+def fp4_target_d2lds_mi16x16x128_pf2x1():
+    yield GEMMRun(
+        M=4096,
+        N=4096,
+        K=32768,
+        beta=0.0,
+        mac_m=256,
+        mac_n=256,
+        mac_k=256,
+        wave_m=16,
+        wave_n=16,
+        wave_k=128,
+        wave_b=1,
+        workgroup_size_x=128,
+        workgroup_size_y=2,
+        unroll_x=0,
+        unroll_y=0,
+        direct2LDS_A=True,
+        direct2LDS_B=True,
+        loadLDSScale_A=False,
+        loadLDSScale_B=False,
+        storeLDS_D=False,
+        prefetch=True,
+        prefetchInFlight=2,
+        prefetchLDSFactor=1,
+        prefetchScale=True,
+        swizzleScale=True,
+        prefetchMixMemOps=True,
+        betaInFma=True,
+        scheduler="Priority",
+        schedulerCost="LinearWeightedSimple",
+        matchMemoryAccess=True,
+        types=TypeParameters(
+            trans_A="T",
+            trans_B="N",
+            type_A="fp4",
+            type_B="fp4",
+            type_C="half",
+            type_D="half",
+            type_acc="float",
+            scale_A="Separate",
+            scaleType_A="E8M0",
+            scale_B="Separate",
+            scaleType_B="E8M0",
+            scaleBlockSize=32,
+        ),
+        numOuter=1,
+        numWarmUp=1000,
+        numInner=1000,
+    )
+
+
+def test_mx():
+    yield from addSkipPermlane(fp4_target_d2lds_mi16x16x128_pf2x1())
+
+
+def test_mx_wgm():
+    yield from add_wgm((0,2), test_mx())
+
+
 def fp4_target_d2lds_mi16x16x128_pf4x1():
     yield GEMMRun(
         M=4096,
@@ -1271,7 +1331,7 @@ def fp4_fast_example():
     yield GEMMRun(
         M=4096,
         N=4096,
-        K=32768,
+        K=8192,
         beta=0.0,
         mac_m=256,
         mac_n=256,
@@ -1381,7 +1441,7 @@ def fp4_single_scale_target_d2lds_mi16x16x128_pf4x1():
     yield GEMMRun(
         M=4096,
         N=4096,
-        K=32768,
+        K=8192,
         beta=0.0,
         mac_m=256,
         mac_n=256,
@@ -1472,6 +1532,15 @@ def fp4_target_sweep_wgms():
             yield from add_wgm(
                 (wgm_dim, wgm_value), fp4_single_scale_target_d2lds_mi16x16x128_pf4x1()
             )
+
+
+def single_scale_options():
+    yield from fp4_single_scale_target_d2lds_mi16x16x128_pf4x1()
+    yield from fp4_single_scale_target_d2lds_mi16x16x128_pf4x1_wgm()
+    yield from fp4_fast_example()
+    yield from fp4_fast_example_wgm()
+    yield from test_mx()
+    yield from test_mx_wgm()
 
 
 def generate_gfx950():
