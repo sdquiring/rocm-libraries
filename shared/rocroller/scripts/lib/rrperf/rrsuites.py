@@ -1331,7 +1331,7 @@ def fp4_fast_example():
     yield GEMMRun(
         M=4096,
         N=4096,
-        K=8192,
+        K=32768,
         beta=0.0,
         mac_m=256,
         mac_n=256,
@@ -1441,7 +1441,7 @@ def fp4_single_scale_target_d2lds_mi16x16x128_pf4x1():
     yield GEMMRun(
         M=4096,
         N=4096,
-        K=8192,
+        K=32768,
         beta=0.0,
         mac_m=256,
         mac_n=256,
@@ -1539,8 +1539,8 @@ def single_scale_options():
     yield from fp4_single_scale_target_d2lds_mi16x16x128_pf4x1_wgm()
     yield from fp4_fast_example()
     yield from fp4_fast_example_wgm()
-    yield from test_mx()
-    yield from test_mx_wgm()
+    # yield from test_mx()
+    # yield from test_mx_wgm()
 
 
 def generate_gfx950():
