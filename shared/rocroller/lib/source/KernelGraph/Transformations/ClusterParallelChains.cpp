@@ -30,8 +30,6 @@
 #include <rocRoller/Graph/GraphUtilities.hpp>
 #include <rocRoller/KernelGraph/Transforms/Simplify.hpp>
 
-#define debug debug
-
 namespace rocRoller
 {
     namespace KernelGraph
@@ -374,8 +372,6 @@ namespace rocRoller
         KernelGraph ClusterParallelChains::apply(KernelGraph const& original)
         {
             auto rv = original;
-
-            Log::debug("lksjflskdj");
 
             {
                 auto groups = identifyParallelMultiplyAndD2LDSChains(rv);

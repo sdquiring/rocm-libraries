@@ -807,7 +807,7 @@ namespace rocRoller
                 // If you leave the `barriers` mapping empty; then
                 // everything is simply connected to the barrier
                 // crated above.
-                if(false)
+                if(true)
                 {
                     barriers.clear();
                     barriers[rocRoller::LayoutType::MATRIX_A] = barrier;
