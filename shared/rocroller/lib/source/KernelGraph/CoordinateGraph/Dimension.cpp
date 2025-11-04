@@ -182,10 +182,16 @@ namespace rocRoller
                                static_cast<int>(commandTag));
         }
 
-        LDS::LDS(bool const isDirect2LDS, std::vector<int> const& sizes)
+        LDS::LDS(bool const isDirect2LDS, std::vector<int> sizes)
             : BaseDimension()
             , isDirect2LDS(isDirect2LDS)
-            , sizes(sizes)
+            , sizes(std::move(sizes))
+        {
+        }
+
+        LDS::LDS(std::vector<int> sizes)
+            : BaseDimension()
+            , sizes(std::move(sizes))
         {
         }
 

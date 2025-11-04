@@ -271,7 +271,8 @@ namespace rocRoller
 
             LDS();
             explicit LDS(bool const isDirect2LDS);
-            LDS(bool const isDirect2LDS, std::vector<int> const& sizes);
+            LDS(bool const isDirect2LDS, std::vector<int> sizes);
+            explicit LDS(std::vector<int> sizes);
 
             std::string name() const override;
 
