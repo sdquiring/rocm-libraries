@@ -263,6 +263,7 @@ namespace rocRoller
         struct LDS : public BaseDimension
         {
             static constexpr bool HasValue = false;
+
             using BaseDimension::BaseDimension;
 
             bool             isDirect2LDS = false;

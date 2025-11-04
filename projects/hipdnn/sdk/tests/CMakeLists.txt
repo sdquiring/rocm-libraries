@@ -32,9 +32,10 @@ add_executable(hipdnn_sdk_tests
     test_utilities/TestFlatbufferDatatypeMapping.cpp
     test_utilities/TestFlatbufferTensorAttributesUtils.cpp
     test_utilities/TestLoggingUtils.cpp
+    test_utilities/TestScopedDirectory.cpp
     test_utilities/TestScopedEnvironmentVariableSetter.cpp
-    test_utilities/TestTempDirectory.cpp
-    test_utilities/TestTestSeeds.cpp
+    test_utilities/TestSeeds.cpp
+    test_utilities/TestVectorLoggingUtils.cpp
     test_utilities/cpu_graph_executor/TestBatchnormBwdPlan.cpp
     test_utilities/cpu_graph_executor/TestBatchnormBwdSignatureKey.cpp
     test_utilities/cpu_graph_executor/TestBatchnormFwdInferencePlan.cpp
@@ -43,10 +44,13 @@ add_executable(hipdnn_sdk_tests
     test_utilities/cpu_graph_executor/TestBatchnormTrainSignatureKey.cpp
     test_utilities/cpu_graph_executor/TestConvolutionBwdPlan.cpp
     test_utilities/cpu_graph_executor/TestConvolutionBwdSignatureKey.cpp
+    test_utilities/cpu_graph_executor/TestConvolutionWrwPlan.cpp
+    test_utilities/cpu_graph_executor/TestConvolutionWrwSignatureKey.cpp
     test_utilities/cpu_graph_executor/TestConvolutionFwdPlan.cpp
     test_utilities/cpu_graph_executor/TestConvolutionFwdSignatureKey.cpp
     test_utilities/cpu_graph_executor/TestCpuReferenceGraphExecutor.cpp
     test_utilities/cpu_graph_executor/TestFusedOperationsCpuGraphExecutor.cpp
+    test_utilities/cpu_graph_executor/TestPointwiseOperationsCpuGraphExecutor.cpp
     test_utilities/cpu_graph_executor/TestGraphTensorBundle.cpp
     test_utilities/cpu_graph_executor/TestPlanRegistrySignatureKey.cpp
     test_utilities/cpu_graph_executor/TestPointwisePlan.cpp
@@ -55,6 +59,7 @@ add_executable(hipdnn_sdk_tests
     utilities/TestCallbackLogger.cpp
     utilities/TestFloats.cpp
     utilities/TestJson.cpp
+    utilities/TestLoadGraphAndTensors.cpp
     utilities/TestMigratableMemory.cpp
     utilities/TestPlatformUtils.cpp
     utilities/TestPointwiseValidation.cpp
@@ -62,6 +67,7 @@ add_executable(hipdnn_sdk_tests
     utilities/TestShallowHostOnlyMigratableMemory.cpp
     utilities/TestShallowTensor.cpp
     utilities/TestShapeUtilities.cpp
+    utilities/TestStaticCast.cpp
     utilities/TestTensor.cpp
     utilities/TestTensorIterator.cpp
     utilities/TestTensorView.cpp
