@@ -76,7 +76,7 @@ namespace rocRoller
                 VMEMObserver,
                 DSMEMObserver,
                 WMMAObserver,
-                ToastObserver,
+                // ToastObserver,
                 // Hazard Observers
                 ACCVGPRReadWrite,
                 ACCVGPRWriteWrite,
