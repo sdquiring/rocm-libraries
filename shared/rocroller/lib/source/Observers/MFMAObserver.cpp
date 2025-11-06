@@ -34,6 +34,9 @@
 #include <rocRoller/Scheduling/Observers/FunctionalUnit/MFMAObserver.hpp>
 #include <rocRoller/Utilities/Settings.hpp>
 
+#define debug critical
+#define Debug Critical
+
 namespace rocRoller
 {
     namespace Scheduling
@@ -199,12 +202,31 @@ namespace rocRoller
             return rv;
         }
 
+        int MFMACoexecObserver::mfmaStall() const
+        {
+            int found = 0;
+            for(auto const& pair : m_disallowedOps)
+            {
+                if(pair.second[CoexecCategory::XDL_Scale])
+                {
+                    found = std::max(found, pair.first);
+                }
+            }
+            if(found > m_programCycle)
+            {
+                return found - m_programCycle;
+            }
+
+            return 0;
+        }
+
         InstructionStatus MFMACoexecObserver::peek(Instruction const& inst) const
         {
             using bs = EnumBitset<CoexecCategory>;
             InstructionStatus rv;
             if(isTargetedInstruction(inst))
             {
+                Log::critical("Here!");
 
                 rv.disallowedCoexec = getDisallowedCycles(inst);
 
@@ -216,6 +238,8 @@ namespace rocRoller
                 if(bOperands == m_bOperands)
                     rv.reusedOperands++;
             }
+
+            rv.mfmaStall = mfmaStall();
 
             auto category = inst.getCategory();
 
@@ -234,13 +258,18 @@ namespace rocRoller
 
         void MFMACoexecObserver::modify(Instruction& inst) const
         {
-            if(!inst.isCommentOnly() && !m_disallowedOps.empty()
-               && Settings::Get(Settings::LogLvl) >= LogLevel::Debug)
             {
-                auto lastCycle = m_disallowedOps.rbegin()->first;
-                inst.addComment(
-                    fmt::format("Cycle: {}\nQueue: {}", m_programCycle, toString(m_disallowedOps)));
+                if(!inst.isCommentOnly())// && !m_disallowedOps.empty())
+                {
+                    auto lastCycle = m_disallowedOps.rbegin()->first;
+                    inst.addComment(fmt::format("Cycle: {}\nQueue: {}\nMFMA {}\nStall {}",
+                                                m_programCycle,
+                                                toString(m_disallowedOps),
+                                                mfmaStall(),
+                                                inst.peekedStatus().stallCycles));
+                }
             }
+            // inst.addComment("DISALLOWED: " + toString(inst.peekedStatus().disallowedCoexec));
         }
 
         void MFMACoexecObserver::observe(Instruction const& inst)
@@ -265,6 +294,140 @@ namespace rocRoller
                 "A Operands: {}\nB Operands: {}\n", toString(m_aOperands), toString(m_bOperands));
 
             return rv;
+        }
+
+        ToastObserver::ToastObserver() {}
+        ToastObserver::ToastObserver(ContextPtr ctx)
+        {
+            m_cats = {{.name          = "MFMA",
+                       .pred          = GPUInstructionInfo::isMFMA,
+                       .expectedCount = 256,
+                       .headStart     = 13},
+                      {.name          = "Buffer",
+                       .pred          = GPUInstructionInfo::isVMEM,
+                       .expectedCount = 32,
+                       .headStart     = 0},
+                      {.name          = "LDS",
+                       .pred          = GPUInstructionInfo::isLDS,
+                       .expectedCount = 64,
+                       .headStart     = 4}};
+
+            auto counts
+                = m_cats | std::views::transform([](auto const& x) { return x.expectedCount; });
+            auto totalCount = std::accumulate(counts.begin(), counts.end(), 0);
+
+            for(auto& cat : m_cats)
+                cat.expectedRatio = static_cast<float>(cat.expectedCount) / totalCount;
+
+            for(auto const& cat : m_cats)
+                m_seenCats[cat.name] = 0;
+        }
+
+        InstructionStatus ToastObserver::peek(Instruction const& inst) const
+        {
+            InstructionStatus rv;
+            if(!m_active || m_totalTargetedInsts == 0)
+                return rv;
+
+            auto cat = instCat(inst);
+            if(cat)
+            {
+#if 0
+                auto myRatio
+                    = static_cast<float>(m_seenCats.at(cat->name) + 1) / m_totalTargetedInsts;
+
+                if(myRatio > cat->expectedRatio)
+                    rv.stallCycles = 10;
+#else
+                auto seen     = m_seenCats.at(cat->name) + 1;
+                int  expected = std::ceil(cat->expectedRatio * (m_totalTargetedInsts + 1));
+
+                if(seen > (expected + cat->headStart))
+                {
+                    rv.stallCycles = (seen - (expected + cat->headStart)) * 1000;
+                }
+
+#endif
+            }
+
+            return rv;
+        }
+
+        void ToastObserver::modify(Instruction& inst) const
+        {
+            if(m_active && instCat(inst))
+            {
+                inst.addComment(state() + fmt::format(" ({})", inst.peekedStatus().stallCycles));
+            }
+        }
+
+        void ToastObserver::observe(Instruction const& inst)
+        {
+            if(inst.getOpCode() == "s_cbranch_scc0")
+                m_active = true;
+            if(inst.getOpCode() == "s_cbranch_scc1")
+                m_active = false;
+
+            if(!m_active)
+                return;
+
+            auto cat = instCat(inst);
+
+            if(cat)
+            {
+                m_seenCats[cat->name]++;
+                m_totalTargetedInsts++;
+            }
+        }
+
+        std::string ToastObserver::state() const
+        {
+            std::string rv;
+
+            bool ratios = m_totalTargetedInsts > 0;
+            bool first  = true;
+
+            for(auto const& cat : m_cats)
+            {
+                auto seen = m_seenCats.at(cat.name);
+                if(!first)
+                    rv += ":";
+                if(ratios)
+                {
+                    auto ratio = static_cast<float>(seen) / m_totalTargetedInsts;
+                    if(ratio > cat.expectedRatio)
+                        rv += "*";
+                }
+                rv += std::to_string(seen);
+                first = false;
+            }
+
+            rv += fmt::format(" ({} ", m_totalTargetedInsts);
+
+            first = true;
+            for(auto const& cat : m_cats)
+            {
+                int expected = std::ceil(m_totalTargetedInsts * cat.expectedRatio) + cat.headStart;
+                if(!first)
+                    rv += ":";
+                rv += std::to_string(expected);
+                first = false;
+            }
+
+            rv += ")";
+
+            return rv;
+        }
+
+        std::optional<ToastObserver::Category> ToastObserver::instCat(Instruction const& inst) const
+        {
+            for(auto const& cat : m_cats)
+            {
+                if(cat.pred(inst.getOpCode()))
+                    return cat;
+            }
+
+            return std::nullopt;
         }
     }
 }

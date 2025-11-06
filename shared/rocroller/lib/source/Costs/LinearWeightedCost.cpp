@@ -116,6 +116,38 @@ namespace rocRoller
                                                        .fractionOfVGPRs    = 0,
                                                        .outOfRegisters     = 1000000000.0,
                                                        .zeroFreeBarriers   = true,
+                                                       .vmemCycles         = 500,
+                                                       .vmemQueueSize      = 3,
+                                                       .dsmemCycles        = 12,
+                                                       .dsmemQueueSize     = 2};
+        constexpr Weights GFX950_SIMPLIFIED_WEIGHTS2 = {.nops               = 10000.,
+                                                       .vmcnt              = 0,
+                                                       .lgkmcnt            = 0,
+                                                       .vmQueueLen         = 0,
+                                                       .vectorQueueSat     = 0,
+                                                       .ldsQueueSat        = 0,
+                                                       .lgkmQueueLen       = 0,
+                                                       .stallCycles        = 1000.0,
+                                                       .notMFMA            = 0,
+                                                       .isMFMA             = 0,
+                                                       .isSMEM             = 0,
+                                                       .isSControl         = 0,
+                                                       .isSALU             = 10,
+                                                       .isVMEMRead         = 0,
+                                                       .isVMEMWrite        = 0,
+                                                       .isLDSRead          = 0,
+                                                       .isLDSWrite         = 0,
+                                                       .isVALU             = 10,
+                                                       .isACCVGPRWrite     = 0,
+                                                       .isACCVGPRRead      = 0,
+                                                       .newSGPRs           = 0,
+                                                       .newVGPRs           = 0,
+                                                       .highWaterMarkSGPRs = 0,
+                                                       .highWaterMarkVGPRs = 0,
+                                                       .fractionOfSGPRs    = 0,
+                                                       .fractionOfVGPRs    = 0,
+                                                       .outOfRegisters     = 1000000000.0,
+                                                       .zeroFreeBarriers   = true,
                                                        .vmemCycles         = 63,
                                                        .vmemQueueSize      = 1,
                                                        .dsmemCycles        = 38,
@@ -368,6 +400,9 @@ namespace rocRoller
                 static_cast<size_t>(Register::Type::Vector));
 
             float notMFMA = inst.getOpCode().find("mfma") == std::string::npos ? 1.0f : 0.0f;
+            if(!notMFMA && status.stallCycles == 0)
+                return 0;
+            auto mfmaPenalty = (notMFMA && status.mfmaStall == 0) ? 10000 : 0;
 
             float fractionOfSGPRs
                 = status.allocatedRegisters.at(static_cast<size_t>(Register::Type::Scalar));
@@ -406,6 +441,7 @@ namespace rocRoller
                    + m_weights.fractionOfSGPRs * fractionOfSGPRs //
                    + m_weights.fractionOfVGPRs * fractionOfVGPRs //
                    + m_weights.outOfRegisters * outOfRegisters //
+                   + mfmaPenalty //
 
                    + m_weights.isSMEM * GPUInstructionInfo::isSMEM(inst.getOpCode()) //
                    + m_weights.isSControl * GPUInstructionInfo::isSControl(inst.getOpCode()) //

@@ -74,6 +74,8 @@ namespace rocRoller
             return concatenate("Status: {",
                                "stall ",
                                stallCycles,
+                               "mfma ",
+                               mfmaStall,
                                ", wait ",
                                waitCount.toString(LogLevel::Terse),
                                ", nop ",
@@ -96,6 +98,8 @@ namespace rocRoller
             stallCycles = std::max(stallCycles, other.stallCycles);
             waitCount.combine(other.waitCount);
             nops = std::max(nops, other.nops);
+
+            mfmaStall = std::max(mfmaStall, other.mfmaStall);
 
             reusedOperands = std::max(reusedOperands, other.reusedOperands);
 

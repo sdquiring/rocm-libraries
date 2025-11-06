@@ -29,6 +29,7 @@
 #include <rocRoller/AssemblyKernel.hpp>
 #include <rocRoller/Expression.hpp>
 #include <rocRoller/ExpressionTransformations.hpp>
+#include <rocRoller/KernelOptions_detail.hpp>
 
 #include <rocRoller/KernelGraph/KernelGraph.hpp>
 #include <rocRoller/KernelGraph/Visitors.hpp>
@@ -265,8 +266,15 @@ namespace rocRoller
 
             Operation visitOperation(int tag, ForLoopOp const& op)
             {
+                auto bad = const_cast<KernelOptionValues *>(&*m_context->kernelOptions());
+                auto bak = bad->minLaunchTimeExpressionComplexity;
+                bad->minLaunchTimeExpressionComplexity = 2;
+                // m_context->kernelOptions()->minLaunchTimeExpressionComplexity
                 auto cleanOp      = op;
                 cleanOp.condition = cleanExpr(op.condition);
+
+                bad->minLaunchTimeExpressionComplexity = bak;
+
                 return cleanOp;
             }
 

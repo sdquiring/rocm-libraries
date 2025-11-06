@@ -104,8 +104,8 @@ namespace rocRoller
                         minCostIdx = idx;
                     }
 
-                    if(minCost == 0)
-                        break;
+                    // if(minCost == 0)
+                    //     break;
                 }
 
                 if(minCostIdx >= 0)

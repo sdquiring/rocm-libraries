@@ -32,6 +32,23 @@
 
 namespace rocRoller
 {
+    /**
+     *         ForLoop
+     * 
+     *      v body 
+     *   Multiply
+     *      v
+     *   Multiply
+     *      v
+     *   Multiply
+     *      v
+     *   Multiply
+     *      v
+     * 
+     * 
+     * 
+     */
+
     namespace KernelGraph
     {
         using vec  = std::vector<int>;
@@ -294,17 +311,28 @@ namespace rocRoller
         {
             auto multiplyChains = findMultiplyChains(graph);
             auto d2ldsChains    = findD2LDSChains(graph);
+            // auto ldsChains      = findLoadLDSChains(graph);
 
             Log::debug("Multiply chains: \n{}", showChains(multiplyChains));
             Log::debug("D2LDS chains: \n{}", showChains(d2ldsChains));
+            // Log::debug("LDS chains: \n{}", showChains(ldsChains));
             // Log::debug("LoadTiled chains: \n{}", showChains(loadChains));
 
             return identifyParallelChains(graph,
                                           {std::move(multiplyChains), std::move(d2ldsChains)});
         }
 
-        void clusterParallelChains(KernelGraph& graph, vec3 const& groups, int factor)
+        /**
+         * 
+         * groups[x]:    each x is a group of nodes that should be clustered
+         * groups[x][y]: each y is a different chain of nodes that should be clustered with the other ys.
+         * groups[x][y][z]: each z is a node within the chain.
+         * 
+         */
+
+        void clusterParallelChainsLTR(KernelGraph& graph, vec3 const& groups, int factor)
         {
+
             for(auto const& group : groups)
             {
                 AssertFatal(group.size() > 1, ShowValue(group.size()));
@@ -322,6 +350,147 @@ namespace rocRoller
 
                 bool anyLeft = false;
 
+                std::vector<int> upstreamNodes;
+                // std::optional<int> nop;
+
+                do
+                {
+                    anyLeft = false;
+
+                    if(!upstreamNodes.empty())
+                    {
+                        AssertFatal(upstreamNodes.size() == group.size(),
+                                    ShowValue(upstreamNodes.size()),
+                                    ShowValue(group.size()));
+                        for(size_t clusterIdx = 0; clusterIdx < group.size(); clusterIdx++)
+                        {
+                            for(size_t clusterIdx2 = clusterIdx + 1; clusterIdx2 < group.size();
+                                clusterIdx++)
+                            {
+                                // for(auto upstreamNode : upstreamNodes)
+                                for(size_t clusterIdx2 = clusterIdx + 1; clusterIdx2 < group.size();
+                                    clusterIdx++)
+                                    if(idxs[clusterIdx2] < group[clusterIdx2].size())
+                                    {
+                                        auto upstreamNode = upstreamNodes[clusterIdx];
+                                        if(upstreamNode > 0)
+                                        {
+                                            graph.control.chain<ControlGraph::Sequence>(
+                                                upstreamNode,
+                                                group[clusterIdx2][idxs[clusterIdx2]]);
+                                        }
+
+                                        anyLeft = true;
+                                    }
+                            }
+                        }
+                        upstreamNodes.clear();
+
+                        if(!anyLeft)
+                            break;
+                    }
+
+                    anyLeft = false;
+
+                    // nop = graph.control.addElement(ControlGraph::NOP());
+
+                    for(size_t clusterIdx = 0; clusterIdx < group.size(); clusterIdx++)
+                    {
+                        auto endIdx  = idxs[clusterIdx] + clusterSizes[clusterIdx];
+                        auto lastIdx = endIdx - 1;
+
+                        if(lastIdx < group[clusterIdx].size())
+                        {
+                            upstreamNodes.push_back(group[clusterIdx][lastIdx]);
+
+                            anyLeft = true;
+                        }
+                        else
+                        {
+                            upstreamNodes.push_back(-1);
+                        }
+
+                        idxs[clusterIdx] = endIdx;
+                    }
+
+                } while(anyLeft);
+            }
+        }
+
+        void clusterParallelChainsUpward(KernelGraph& graph, vec3 const& groups, int factor)
+        {
+            for(auto const& group : groups)
+            {
+                AssertFatal(group.size() > 1, ShowValue(group.size()));
+                auto sizes = group | std::views::transform([](auto const& c) { return c.size(); });
+                auto groupGCD = std::reduce(
+                    sizes.begin(), sizes.end(), *sizes.begin(), std::gcd<size_t, size_t>);
+
+                auto tmp = sizes | std::views::transform([factor, groupGCD](size_t size) {
+                               return (size * factor) / groupGCD;
+                           });
+
+                std::vector clusterSizes(tmp.begin(), tmp.end());
+
+                std::vector<int> firstIdxs(group.size(), 0);
+                std::vector<int> lastIdxs(group.size(), 0);
+                std::vector<int> nextIdxs(group.size(), 0);
+
+                bool any = false;
+                do
+                {
+                    any = false;
+
+                    for(int clusterIdx = 0; clusterIdx < group.size(); clusterIdx++)
+                    {
+                        nextIdxs[clusterIdx] = firstIdxs[clusterIdx] + clusterSizes[clusterIdx];
+                        lastIdxs[clusterIdx] = nextIdxs[clusterIdx] - 1;
+                    }
+
+                    for(int clusterIdx = 0; clusterIdx + 1 < group.size(); clusterIdx++)
+                    {
+                        if(lastIdxs[clusterIdx + 1] < group[clusterIdx + 1].size()
+                           && nextIdxs[clusterIdx] < group[clusterIdx].size())
+                        {
+                            any         = true;
+                            auto before = group[clusterIdx + 1][lastIdxs[clusterIdx + 1]];
+                            auto after  = group[clusterIdx][nextIdxs[clusterIdx]];
+
+                            graph.control.chain<ControlGraph::Sequence>(before, after);
+                        }
+                    }
+
+                    std::swap(firstIdxs, nextIdxs);
+
+                } while(any);
+            }
+        }
+
+        void clusterParallelChainsNop(KernelGraph& graph,
+                                      vec3 const&  groups,
+                                      int          factor,
+                                      vec          slip = {})
+        {
+            for(auto const& group : groups)
+            {
+                AssertFatal(group.size() > 1, ShowValue(group.size()));
+                auto sizes = group | std::views::transform([](auto const& c) { return c.size(); });
+                auto groupGCD = std::reduce(
+                    sizes.begin(), sizes.end(), *sizes.begin(), std::gcd<size_t, size_t>);
+
+                auto tmp = sizes | std::views::transform([factor, groupGCD](size_t size) {
+                               return (size * factor) / groupGCD;
+                           });
+
+                std::vector clusterSizes(tmp.begin(), tmp.end());
+
+                std::vector<int> idxs(group.size(), 0);
+                if(!slip.empty())
+                    idxs = slip;
+
+                // bool first = true;
+                bool anyLeft = false;
+
                 std::optional<int> nop;
 
                 do
@@ -330,7 +499,7 @@ namespace rocRoller
 
                     if(nop)
                     {
-                        for(size_t clusterIdx = 0; clusterIdx < group.size(); clusterIdx++)
+                        for(int clusterIdx = 0; clusterIdx < group.size(); clusterIdx++)
                         {
                             if(idxs[clusterIdx] < group[clusterIdx].size())
                             {
@@ -349,7 +518,7 @@ namespace rocRoller
 
                     nop = graph.control.addElement(ControlGraph::NOP());
 
-                    for(size_t clusterIdx = 0; clusterIdx < group.size(); clusterIdx++)
+                    for(int clusterIdx = 0; clusterIdx < group.size(); clusterIdx++)
                     {
                         auto endIdx  = idxs[clusterIdx] + clusterSizes[clusterIdx];
                         auto lastIdx = endIdx - 1;
@@ -364,6 +533,7 @@ namespace rocRoller
 
                         idxs[clusterIdx] = endIdx;
                     }
+                    // first = false;
 
                 } while(anyLeft);
             }
@@ -377,7 +547,7 @@ namespace rocRoller
                 auto groups = identifyParallelMultiplyAndD2LDSChains(rv);
                 Log::debug(showGroups(groups));
 
-                clusterParallelChains(rv, groups, 1);
+                clusterParallelChainsNop(rv, groups, 1);
             }
 
             removeRedundantSequenceEdges(rv);
@@ -386,7 +556,8 @@ namespace rocRoller
                 auto groups = identifyParallelMultiplyAndLDSChains(rv);
                 Log::debug(showGroups(groups));
 
-                clusterParallelChains(rv, groups, 1);
+                // clusterParallelChainsNop(rv, groups, 1, {0, 8});
+                clusterParallelChainsUpward(rv, groups, 1);
             }
 
             return rv;
