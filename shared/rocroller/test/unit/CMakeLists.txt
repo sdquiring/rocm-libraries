@@ -84,6 +84,7 @@ target_sources(rocroller-tests
         "${CMAKE_CURRENT_SOURCE_DIR}/KernelGraphTest/KernelGraphUtils.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/KernelGraphTest/Simplify.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/KernelGraphTest/UpdateParameters.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/KernelGraphTest_GPU.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/KernelIndexTest.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/KernelOptionsTest.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/KernelTest.cpp"

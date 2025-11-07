@@ -24,17 +24,8 @@
  *
  *******************************************************************************/
 
-#ifdef ROCROLLER_USE_HIP
-#include <hip/hip_ext.h>
-#include <hip/hip_runtime.h>
-#endif /* ROCROLLER_USE_HIP */
-
-#include <rocRoller/AssemblyKernel.hpp>
-#include <rocRoller/CodeGen/ArgumentLoader.hpp>
-#include <rocRoller/CommandSolution.hpp>
 #include <rocRoller/Expression.hpp>
 #include <rocRoller/ExpressionTransformations.hpp>
-#include <rocRoller/KernelGraph/ControlGraph/ControlFlowRWTracer.hpp>
 #include <rocRoller/KernelGraph/CoordinateGraph/CoordinateGraph.hpp>
 #include <rocRoller/KernelGraph/KernelGraph.hpp>
 #include <rocRoller/KernelGraph/Reindexer.hpp>
@@ -43,14 +34,10 @@
 #include <rocRoller/KernelGraph/Visitors.hpp>
 #include <rocRoller/KernelOptions_detail.hpp>
 #include <rocRoller/Operations/Command.hpp>
-#include <rocRoller/Utilities/Error.hpp>
-#include <rocRoller/Utilities/Random.hpp>
 #include <rocRoller/Utilities/Settings.hpp>
-#include <rocRoller/Utilities/Timer.hpp>
 
 #include <common/CommonGraphs.hpp>
 
-#include "GPUContextFixture.hpp"
 #include "GenericContextFixture.hpp"
 #include "SourceMatcher.hpp"
 #include "Utilities.hpp"
