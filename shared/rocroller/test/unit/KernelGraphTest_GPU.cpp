@@ -71,6 +71,7 @@ namespace KernelGraphTest
 
         void GPU_SAXPBY(bool reload);
     };
+
     void KernelGraphTestGPU::GPU_SAXPBY(bool reload)
     {
         RandomGenerator random(1263u);
@@ -468,6 +469,7 @@ namespace KernelGraphTest
 
         ASSERT_LT(rnorm, 1.e-12);
     }
+
     TEST_F(KernelGraphTestGPU, GPU_Conditional)
     {
         rocRoller::KernelGraph::KernelGraph kgraph;
