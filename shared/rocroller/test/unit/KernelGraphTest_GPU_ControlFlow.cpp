@@ -304,3 +304,4 @@ namespace KernelGraphTest
             EXPECT_GT(assembledKernel.size(), 0);
         }
     }
+}

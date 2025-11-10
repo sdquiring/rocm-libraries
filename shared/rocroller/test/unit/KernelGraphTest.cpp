@@ -75,6 +75,7 @@ namespace KernelGraphTest
             Expression::toString(clean_expr),
             "Multiply(user_Int32_Value_1:I, Add(user_Int32_Value_0:I, user_Int32_Value_1:I)I)I");
     }
+
     TEST_F(KernelGraphTest, CleanArguments)
     {
         auto example = rocRollerTest::Graphs::VectorAddNegSquare<int>();
@@ -125,6 +126,7 @@ namespace KernelGraphTest
                 EXPECT_THAT(dot, pred);
         }
     }
+
     TEST_F(KernelGraphTest, Basic)
     {
         auto kgraph = rocRoller::KernelGraph::KernelGraph();
@@ -568,6 +570,7 @@ namespace KernelGraphTest
 
         EXPECT_EQ(NormalizedSource(expected1), NormalizedSource(kgraph0.toDOT()));
     }
+
     TEST_F(KernelGraphTest, WaitZero)
     {
         rocRoller::KernelGraph::KernelGraph kgraph;
@@ -628,6 +631,7 @@ namespace KernelGraphTest
         auto tag       = std::get<Expression::DataFlowTag>(*lhs).tag;
         EXPECT_EQ(tag, vgprB);
     }
+
     TEST_F(KernelGraphTest, ReindexAssertOpExpression)
     {
         rocRoller::KernelGraph::KernelGraph kgraph;

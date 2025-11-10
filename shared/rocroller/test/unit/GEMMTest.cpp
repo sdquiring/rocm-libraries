@@ -3478,6 +3478,7 @@ namespace GEMMDriverTest
 
         basicGEMM<Half>(gemm);
     }
+
     TEST_P(GEMMJammedTestGPU, GPU_BasicGEMMFP16Jammed2x4)
     {
         REQUIRE_ARCH_CAP(GPUCapability::HasMFMA);

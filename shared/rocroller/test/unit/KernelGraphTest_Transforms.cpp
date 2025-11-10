@@ -474,6 +474,7 @@ namespace KernelGraphTest
         for(auto op : kgraph1.control.getNodes())
             EXPECT_EQ(transformers.at(op).getIndexes(), kgraph1.buildTransformer(op).getIndexes());
     }
+
     TEST_F(KernelGraphTest, RemoveSetCoordinate)
     {
         auto kgraph = rocRoller::KernelGraph::KernelGraph();
@@ -598,6 +599,7 @@ namespace KernelGraphTest
 
         EXPECT_EQ(NormalizedSource(expected), NormalizedSource(kg2.control.toDOT()));
     }
+
     TEST_F(KernelGraphTest, StreamKTwoTileDPFirst)
     {
         auto kgraph = rocRoller::KernelGraph::KernelGraph();
