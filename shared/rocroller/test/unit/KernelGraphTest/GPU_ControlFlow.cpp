@@ -43,9 +43,9 @@
 
 #include <common/CommonGraphs.hpp>
 
-#include "GPUContextFixture.hpp"
-#include "SourceMatcher.hpp"
-#include "Utilities.hpp"
+#include "../GPUContextFixture.hpp"
+#include "../SourceMatcher.hpp"
+#include "../Utilities.hpp"
 
 #include "KernelGraphTestGPUFixture.hpp"
 

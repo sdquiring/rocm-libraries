@@ -29,7 +29,7 @@
 #include <rocRoller/Expression.hpp>
 #include <rocRoller/Utilities/Settings.hpp>
 
-#include "GPUContextFixture.hpp"
+#include "../GPUContextFixture.hpp"
 
 namespace KernelGraphTest
 {

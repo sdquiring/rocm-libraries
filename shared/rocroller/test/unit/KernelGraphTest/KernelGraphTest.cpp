@@ -38,9 +38,9 @@
 
 #include <common/CommonGraphs.hpp>
 
-#include "GenericContextFixture.hpp"
-#include "SourceMatcher.hpp"
-#include "Utilities.hpp"
+#include "../GenericContextFixture.hpp"
+#include "../SourceMatcher.hpp"
+#include "../Utilities.hpp"
 
 #include "KernelGraphTestFixture.hpp"
 

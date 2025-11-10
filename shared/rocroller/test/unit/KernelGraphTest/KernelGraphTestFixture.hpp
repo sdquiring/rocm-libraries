@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "GenericContextFixture.hpp"
+#include "../GenericContextFixture.hpp"
 #include <rocRoller/Expression.hpp>
 
 namespace KernelGraphTest
