@@ -152,6 +152,133 @@ namespace rocRoller
             }
         };
 
+        std::string findEscapingSequenceEdges(KernelGraph const& k)
+        {
+            std::string rv;
+
+            for(auto edge : k.control.getEdges<ControlGraph::Sequence>())
+            {
+                auto loc = k.control.getLocation(edge);
+
+                AssertFatal(loc.incoming.size() == 1,
+                            "Sequence edge should have exactly one incoming edge");
+                AssertFatal(loc.outgoing.size() == 1,
+                            "Sequence edge should have exactly one outgoing edge");
+
+                // auto bodyParentIn  = bodyParents(loc.incoming[0], k).take(1).only().value();
+                // auto bodyParentOut = bodyParents(loc.outgoing[0], k).take(1).only().value();
+
+                auto notThisEdge = [edge](int x) { return x != edge; };
+
+                auto roots = k.control.roots().to<std::set>();
+
+                auto getBodyParent
+                    = [&](int startNode) -> std::tuple<int, ControlGraph::ControlEdge> {
+                    auto prevNode = startNode;
+
+                    for(auto node : k.control.depthFirstVisit(
+                            prevNode, notThisEdge, Graph::Direction::Upstream))
+                    {
+                        if(node == startNode)
+                            continue;
+
+                        auto lastEdgeIdx = k.control.findEdge(node, prevNode);
+
+                        AssertFatal(lastEdgeIdx.has_value(),
+                                    "Graph walking error: No edge found between ",
+                                    prevNode,
+                                    " and ",
+                                    node);
+
+                        auto lastEdge = k.control.getEdge(*lastEdgeIdx);
+
+                        if(!std::holds_alternative<ControlGraph::Sequence>(lastEdge))
+                        {
+                            return {node, lastEdge};
+                        }
+
+                        prevNode = node;
+
+                        AssertFatal(!roots.contains(node),
+                                    "Got to a root node with only Sequence edges");
+                    }
+
+                    return {startNode, ControlGraph::Sequence()};
+                };
+
+                auto [bodyParentIn, bodyEdgeIn]   = getBodyParent(loc.incoming[0]);
+                auto [bodyParentOut, bodyEdgeOut] = getBodyParent(loc.outgoing[0]);
+
+                if(bodyParentIn != bodyParentOut || bodyEdgeIn.index() != bodyEdgeOut.index())
+                {
+                    rv += fmt::format(
+                        "Sequence edge {} ({} -> {}) escapes from {} {} ({}) to {} {} ({})\n",
+                        edge,
+                        loc.incoming[0],
+                        loc.outgoing[0],
+                        bodyParentIn,
+                        toString(k.control.getNode(bodyParentIn)),
+                        toString(bodyEdgeIn),
+                        bodyParentOut,
+                        toString(k.control.getNode(bodyParentOut)),
+                        toString(bodyEdgeOut));
+                }
+            }
+
+            return rv;
+        }
+
+        std::string findCycles(KernelGraph const& k,
+                               int                node,
+                               std::set<int>&     visitedNodes,
+                               std::vector<int>   path)
+        {
+            if(visitedNodes.contains(node))
+            {
+                auto iter = std::ranges::find(path, node);
+                if(iter != path.end())
+                {
+                    path.push_back(node);
+                    iter = std::ranges::find(path, node);
+                    return fmt::format("Cycle found: {}\n", fmt::join(iter, path.end(), " -> "));
+                }
+                return "";
+            }
+
+            visitedNodes.insert(node);
+            path.push_back(node);
+
+            std::string rv;
+
+            // rv += fmt::format("Visiting node {} from {}\n", node, fmt::join(path, " -> "));
+
+            for(auto outgoingEdge : k.control.getNeighbours<Graph::Direction::Downstream>(node))
+            {
+                for(auto outgoingNode :
+                    k.control.getNeighbours<Graph::Direction::Downstream>(outgoingEdge))
+                {
+                    // rv += fmt::format("    : {} -> {}\n", outgoingEdge, outgoingNode);
+                    rv += findCycles(k, outgoingNode, visitedNodes, path);
+                }
+            }
+
+            return rv;
+        }
+
+        std::string findControlGraphCycles(KernelGraph const& k)
+        {
+            std::string rv;
+
+            std::set<int> visitedNodes;
+
+            for(auto node : k.control.roots())
+            {
+                rv += findCycles(k, node, visitedNodes, {node});
+            }
+
+            return rv;
+        }
+
         ConstraintStatus WalkableControlGraph(KernelGraph const& k)
         {
             TIMER(t, "Constraint::WalkableControlGraph");
@@ -160,8 +287,10 @@ namespace rocRoller
 
             auto allNodes = k.control.getNodes().to<std::set>();
 
-            if(visitor.visitedNodes != allNodes)
+            // if(visitor.visitedNodes != allNodes)
+            if(!visitor.status.satisfied)
             {
+                // Log::critical("Here!");
                 std::set<int> nonVisitedNodes;
                 std::set_difference(allNodes.begin(),
                                     allNodes.end(),
@@ -170,12 +299,31 @@ namespace rocRoller
                                     std::inserter(nonVisitedNodes, nonVisitedNodes.end()));
 
                 std::ostringstream msg;
-                msg << "Not all nodes were visited! Missing: ";
-                streamJoin(msg, nonVisitedNodes, ", ");
-                msg << "\n All nodes: ";
-                streamJoin(msg, allNodes, ", ");
-                msg << "\n Visited nodes: ";
-                streamJoin(msg, visitor.visitedNodes, ", ");
+
+                msg << "Not all nodes were visited! ";
+
+                auto escapingSequenceMsg = findEscapingSequenceEdges(k);
+                auto controlGraphCycles  = findControlGraphCycles(k);
+
+                if(!escapingSequenceMsg.empty())
+                {
+                    msg << "Escaping sequence edges:\n" << escapingSequenceMsg;
+                }
+
+                if(!controlGraphCycles.empty())
+                {
+                    msg << "Control graph cycles:\n" << controlGraphCycles;
+                }
+
+                if(escapingSequenceMsg.empty() && controlGraphCycles.empty())
+                {
+                    msg << "Missing nodes: ";
+                    streamJoin(msg, nonVisitedNodes, ", ");
+                    msg << "\n All nodes: ";
+                    streamJoin(msg, allNodes, ", ");
+                    msg << "\n Visited nodes: ";
+                    streamJoin(msg, visitor.visitedNodes, ", ");
+                }
 
                 visitor.status.combine(false, msg.str());
             }

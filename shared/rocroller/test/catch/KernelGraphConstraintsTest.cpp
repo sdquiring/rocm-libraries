@@ -252,18 +252,77 @@ SCENARIO("WalkableControlGraph constraint works", "[kernel-graph]")
             CHECK(rv.satisfied);
         }
 
-        WHEN("An invalid edge is added")
+        WHEN("An invalid edge is added (from inside conditional to outside)")
         {
-            g.control.addElement(cg::Sequence{}, {ifAssign}, {afterAssign});
+            auto badEdge = g.control.addElement(cg::Sequence{}, {ifAssign}, {afterAssign});
 
             THEN("The constraint fails.")
             {
                 auto rv = g.checkConstraints({&kg::WalkableControlGraph});
 
                 CAPTURE(rv.explanation);
+                CAPTURE(g.control.toDOT());
                 CHECK_FALSE(rv.satisfied);
+                CHECK_THAT(rv.explanation,
+                           ContainsSubstring("Escaping sequence edges")
+                               && ContainsSubstring(fmt::format("Sequence edge {}", badEdge)));
             }
         }
+
+        WHEN("An invalid edge is added (from outside conditional to inside)")
+        {
+            auto badEdge = g.control.addElement(cg::Sequence{}, {afterAssign}, {ifAssign});
+
+            THEN("The constraint fails.")
+            {
+                auto rv = g.checkConstraints({&kg::WalkableControlGraph});
+
+                CAPTURE(rv.explanation);
+                CAPTURE(g.control.toDOT());
+                CHECK_FALSE(rv.satisfied);
+                CHECK_THAT(rv.explanation,
+                           ContainsSubstring("Escaping sequence edges")
+                               && ContainsSubstring(fmt::format("Sequence edge {}", badEdge)));
+            }
+        }
+
+        WHEN("An invalid edge is added (from if block to else block)")
+        {
+            auto badEdge = g.control.addElement(cg::Sequence{}, {ifAssign}, {elseAssign});
+
+            THEN("The constraint fails.")
+            {
+                auto rv = g.checkConstraints({&kg::WalkableControlGraph});
+
+                CAPTURE(rv.explanation);
+                CAPTURE(g.control.toDOT());
+                CHECK_FALSE(rv.satisfied);
+                CHECK_THAT(rv.explanation,
+                           ContainsSubstring("Escaping sequence edges")
+                               && ContainsSubstring(fmt::format("Sequence edge {}", badEdge)));
+            }
+        }
+
+        // WHEN("An invalid edge is added (from conditional to for loop)")
+        // {
+        //     auto forLoop = g.control.addElement(cg::ForLoopOp{});
+        //     auto forLoopAssign = g.control.addElement(cg::Assign{});
+        //     g.control.addElement(cg::Body{}, {forLoop}, {forLoopAssign});
+
+        //     auto badEdge = g.control.addElement(cg::Sequence{}, {ifAssign}, {forLoopAssign});
+
+        //     THEN("The constraint fails.")
+        //     {
+        //         auto rv = g.checkConstraints({&kg::WalkableControlGraph});
+
+        //         CAPTURE(rv.explanation);
+        //         // CAPTURE(g.control.toDOT());
+        //         CHECK_FALSE(rv.satisfied);
+        //         CHECK_THAT(rv.explanation,
+        //                    ContainsSubstring("Escaping sequence edges")
+        //                        && ContainsSubstring(fmt::format("Sequence edge {}", badEdge)));
+        //     }
+        // }
 
         WHEN("A cycle is added")
         {
