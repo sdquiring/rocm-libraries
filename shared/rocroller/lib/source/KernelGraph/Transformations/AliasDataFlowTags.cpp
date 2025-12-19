@@ -113,7 +113,8 @@ namespace rocRoller
                 for(int s : sizes)
                     size *= s;
 
-                return std::make_tuple(memoryType, layoutType, dataType, size);
+                // return std::make_tuple(memoryType, layoutType, dataType, size);
+                return std::make_tuple(memoryType, LayoutType::MATRIX_A, dataType, size);
             }
 
             std::string TagExtent::toString() const
@@ -485,6 +486,7 @@ namespace rocRoller
             {
                 std::map<int, int> aliases;
 
+
                 bool foundAny = false;
                 do
                 {
@@ -519,11 +521,20 @@ namespace rocRoller
                     Log::debug("{} aliases so far.", aliases.size());
                 } while(foundAny);
 
+                std::set<int> nodesHere;
+
                 for(auto ext : extents)
                 {
-                    Log::debug("{}\n{}", ext.toString(), ext.orderInfo(kgraph));
+                    // Log::debug("{}\n{}", ext.toString(), ext.orderInfo(kgraph));
+                    Log::debug("{}", ext.toString());
+
+                    auto nodes = ext.allNodes();
+                    nodesHere.insert(nodes.begin(), nodes.end());
+
                     ext.validate(kgraph);
                 }
+
+                Log::debug("\n{}", kgraph.control.nodeOrderTableString(nodesHere));
 
                 return aliases;
             }
