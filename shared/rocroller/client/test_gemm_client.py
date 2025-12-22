@@ -276,10 +276,11 @@ types:
   scaleShuffleTileA: []
   scaleShuffleTileB: []
   scaleSkipPermlane: false
+matchMemoryAccess: true
+tailLoops: true
 streamK: false
 streamKTwoTile: false
 streamKTwoTileDPFirst: false
-matchMemoryAccess: true
 loadScale_A: BufferToVGPR
 loadScale_B: BufferToVGPR
 swizzleScale: false
@@ -324,6 +325,7 @@ betaInFma: true
 scheduler: Priority
 schedulerCost: LinearWeighted
 matchMemoryAccess: true
+tailLoops: true
 types:
   trans_A: N
   trans_B: N
@@ -388,6 +390,7 @@ betaInFma: true
 scheduler: Priority
 schedulerCost: LinearWeighted
 matchMemoryAccess: true
+tailLoops: true
 types:
   trans_A: N
   trans_B: N
