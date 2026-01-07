@@ -501,6 +501,8 @@ namespace rocRoller
          */
         std::optional<T> only();
 
+        T onlyValue();
+
         /**
          * Returns true if `*this` is an empty generator.
          */
@@ -548,6 +550,9 @@ namespace rocRoller
     template <std::ranges::input_range Range>
     inline std::optional<std::ranges::range_value_t<Range>> only(Range range);
 
+    template <std::ranges::input_range Range>
+    inline std::ranges::range_value_t<Range> onlyValue(Range range);
+
     /**
      * @brief True if the generator is empty.
      *
@@ -560,6 +565,26 @@ namespace rocRoller
      */
     template <std::ranges::input_range Range>
     inline constexpr bool empty(Range range);
+
+    template <std::integral T>
+    Generator<T> iota(T begin, T end, T inc)
+    {
+        for(; begin < end; begin += inc)
+            co_yield begin;
+    }
+
+    template <std::integral T>
+    Generator<T> iota(T begin, T end)
+    {
+        co_yield iota<T>(begin, end, 1);
+    }
+
+    template <std::integral T>
+    Generator<T> iota(T begin)
+    {
+        for(;; ++begin)
+            co_yield begin;
+    }
 
 }
 

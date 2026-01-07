@@ -33,6 +33,7 @@
 #include <rocRoller/InstructionValues/Register_fwd.hpp>
 #include <rocRoller/Scheduling/Scheduler_fwd.hpp>
 #include <rocRoller/Scheduling/Scheduling.hpp>
+#include <rocRoller/Utilities/Generator.hpp>
 #include <rocRoller/Utilities/Settings_fwd.hpp>
 
 namespace rocRoller

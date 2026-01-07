@@ -33,6 +33,7 @@
 #include <rocRoller/CommandSolution.hpp>
 #include <rocRoller/DataTypes/DataTypes.hpp>
 #include <rocRoller/Operations/CommandArguments.hpp>
+#include <rocRoller/Utilities/Generator.hpp>
 #include <rocRoller/Utilities/Utils.hpp>
 
 namespace rocRoller

@@ -44,7 +44,6 @@
 #include <fmt/ranges.h>
 
 #include <rocRoller/Utilities/Concepts.hpp>
-#include <rocRoller/Utilities/Generator.hpp>
 
 namespace rocRoller
 {
@@ -292,26 +291,6 @@ namespace rocRoller
             return (GenerateBitField(elementWidth, valN...) << elementWidth) | (mask & val0);
         }
     };
-
-    template <std::integral T>
-    Generator<T> iota(T begin, T end, T inc)
-    {
-        for(; begin < end; begin += inc)
-            co_yield begin;
-    }
-
-    template <std::integral T>
-    Generator<T> iota(T begin, T end)
-    {
-        co_yield iota<T>(begin, end, 1);
-    }
-
-    template <std::integral T>
-    Generator<T> iota(T begin)
-    {
-        for(;; ++begin)
-            co_yield begin;
-    }
 
     inline constexpr auto Generated(auto gen)
     {

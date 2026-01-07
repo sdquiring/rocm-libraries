@@ -30,6 +30,8 @@
 
 #include <rocRoller/Utilities/Generator.hpp>
 
+#include <rocRoller/Utilities/Error.hpp>
+
 namespace rocRoller
 {
     inline std::string toString(GeneratorState s)
@@ -481,6 +483,30 @@ namespace rocRoller
             return value;
 
         return {};
+    }
+
+    template <std::movable T>
+    T Generator<T>::onlyValue()
+    {
+        return rocRoller::onlyValue(std::move(*this));
+    }
+
+    template <std::ranges::input_range Range>
+    inline std::ranges::range_value_t<Range> onlyValue(Range range)
+    {
+        auto iter = range.begin();
+        AssertFatal(iter != range.end(), "Only value: range is empty!");
+
+        auto value = *iter;
+
+        ++iter;
+
+        if(iter != range.end())
+        {
+            Throw<FatalError>("Only value: range has more than one element!");
+        }
+
+        return value;
     }
 
     template <std::movable T>
