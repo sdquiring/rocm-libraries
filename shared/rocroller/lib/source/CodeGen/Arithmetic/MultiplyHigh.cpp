@@ -56,28 +56,40 @@ namespace rocRoller
 
         if(dataTypeInfoLhs.elementBits == 32u && dataTypeInfoRhs.elementBits == 32u)
         {
+            std::string prefix;
+            std::string suffix = dataTypeInfoDest.isSigned ? "i32" : "u32";
+
+            EnumBitset<Register::Type> lhsTypes;
+            EnumBitset<Register::Type> rhsTypes({Register::Type::Constant});
+
             if(dest->regType() == Register::Type::Scalar)
             {
-                if(dataTypeInfoDest.isSigned)
-                {
-                    co_yield_(Instruction("s_mul_hi_i32", {dest}, {lhs, rhs}, {}, ""));
-                }
-                else
-                {
-                    co_yield_(Instruction("s_mul_hi_u32", {dest}, {lhs, rhs}, {}, ""));
-                }
+                prefix = "s";
+
+                lhsTypes.set(Register::Type::Scalar, true);
+
+                rhsTypes.set(Register::Type::VCC, true);
+                rhsTypes.set(Register::Type::Scalar, true);
+                rhsTypes.set(Register::Type::Literal, true);
             }
             else if(dest->regType() == Register::Type::Vector)
             {
-                if(dataTypeInfoDest.isSigned)
-                {
-                    co_yield_(Instruction("v_mul_hi_i32", {dest}, {lhs, rhs}, {}, ""));
-                }
-                else
-                {
-                    co_yield_(Instruction("v_mul_hi_u32", {dest}, {lhs, rhs}, {}, ""));
-                }
+                prefix = "v";
+
+                lhsTypes.set(Register::Type::Vector, true);
+
+                rhsTypes.set(Register::Type::Vector, true);
             }
+            else
+            {
+                Throw<FatalError>("Invalid destination type for MultiplyHigh: ", dest->regType());
+            }
+
+            co_yield m_context->copier()->ensureTypeCommutative(lhsTypes, lhs, rhsTypes, rhs);
+
+            std::string opcode = fmt::format("{}_mul_hi_{}", prefix, suffix);
+
+            co_yield_(Instruction(opcode, {dest}, {lhs, rhs}, {}, ""));
         }
         else if(dataTypeInfoDest.elementBits == 64u)
         {
