@@ -24,6 +24,7 @@
  *
  *******************************************************************************/
 
+#include "rocRoller/CodeGen/CopyGenerator.hpp"
 #include <rocRoller/CodeGen/Arithmetic/Subtract.hpp>
 #include <rocRoller/CodeGen/SubInstruction.hpp>
 #include <rocRoller/Utilities/Component.hpp>
@@ -69,6 +70,11 @@ namespace rocRoller
         AssertFatal(lhs != nullptr);
         AssertFatal(rhs != nullptr);
 
+        auto copier = m_context->copier();
+
+        co_yield copier->ensureType(lhs, lhs, {Register::Type::Scalar, Register::Type::Vector, Register::Type::Constant});
+        co_yield copier->ensureType(rhs, rhs, {Register::Type::Scalar, Register::Type::Vector, Register::Type::Constant});
+
         auto const& gpu = m_context->targetArchitecture().target();
         if(gpu.isCDNAGPU())
         {
@@ -109,6 +115,9 @@ namespace rocRoller
     {
         AssertFatal(lhs != nullptr);
         AssertFatal(rhs != nullptr);
+
+        co_yield m_context->copier()->ensureType(lhs, lhs, {Register::Type::Scalar, Register::Type::Vector, Register::Type::Constant});
+        co_yield m_context->copier()->ensureType(rhs, rhs, {Register::Type::Scalar, Register::Type::Vector, Register::Type::Constant});
 
         co_yield VectorSubUInt32(m_context, dest, lhs, rhs);
     }

@@ -54,6 +54,11 @@ public:
      */
     template <typename... Args>
     void operator()(rocRoller::KernelInvocation const& invocation, Args const&... args);
+    
+    /**
+     * Launch the kernel with manually constructed KernelArguments.
+     */
+    void operator()(rocRoller::KernelInvocation const& invocation, rocRoller::KernelArguments const& args);
 
     /**
      * Get the assembled code object as bytes.

@@ -1573,27 +1573,35 @@ namespace ExpressionTest
         CHECK(litDouble == resultType(exprSix));
         // Result type not (yet?) defined for mixed integral/floating point types.
 
-        CHECK(true == std::get<bool>(evaluate(exprSix > exprOne)));
-        CHECK(true == std::get<bool>(evaluate(exprSix >= exprOne)));
-        CHECK(false == std::get<bool>(evaluate(exprSix < exprOne)));
-        CHECK(false == std::get<bool>(evaluate(exprSix <= exprOne)));
-        CHECK(true == std::get<bool>(evaluate(exprSix != exprOne)));
+        CHECK(std::get<bool>(evaluate(exprSix > exprOne)));
+        CHECK(std::get<bool>(evaluate(exprSix >= exprOne)));
+        CHECK_FALSE(std::get<bool>(evaluate(exprSix < exprOne)));
+        CHECK_FALSE(std::get<bool>(evaluate(exprSix <= exprOne)));
+        CHECK(std::get<bool>(evaluate(exprSix != exprOne)));
 
         CHECK(litBool == resultType(one > seven));
 
-        CHECK(true == std::get<bool>(evaluate(exprSix < exprSeven)));
-        CHECK(true == std::get<bool>(evaluate(exprSix <= exprSeven)));
-        CHECK(false == std::get<bool>(evaluate(exprSix > exprSeven)));
-        CHECK(false == std::get<bool>(evaluate(exprSix >= exprSeven)));
+        CHECK(std::get<bool>(evaluate(exprSix < exprSeven)));
+        CHECK(std::get<bool>(evaluate(exprSix <= exprSeven)));
+        CHECK_FALSE(std::get<bool>(evaluate(exprSix > exprSeven)));
+        CHECK_FALSE(std::get<bool>(evaluate(exprSix >= exprSeven)));
 
-        CHECK(true == std::get<bool>(evaluate(one <= exprOne)));
-        CHECK(true == std::get<bool>(evaluate(one == exprOne)));
-        CHECK(true == std::get<bool>(evaluate(one >= exprOne)));
-        CHECK(false == std::get<bool>(evaluate(one != exprOne)));
-
+        CHECK(std::get<bool>(evaluate(one <= exprOne)));
+        CHECK(std::get<bool>(evaluate(one == exprOne)));
+        CHECK(std::get<bool>(evaluate(one >= exprOne)));
+        CHECK_FALSE(std::get<bool>(evaluate(one != exprOne)));
+        CHECK_FALSE(std::get<uint32_t>(evaluate(convert(DataType::UInt32, one != exprOne))));
+        {
+        auto minusFive = Expression::literal(-50002);
+        auto expr = convert(DataType::UInt32, minusFive != minusFive);
+        Log::critical("expr: {}", toString(expr));
+        auto result = evaluate(expr);
+        Log::critical("result: {}", toString(result));
+        CHECK_FALSE(std::get<uint32_t>(result));
+        }
         auto trueExp = std::make_shared<Expression::Expression>(true);
-        CHECK(true == std::get<bool>(evaluate(trueExp == (one >= exprOne))));
-        CHECK(false == std::get<bool>(evaluate(trueExp == (one < exprOne))));
+        CHECK(std::get<bool>(evaluate(trueExp == (one >= exprOne))));
+        CHECK_FALSE(std::get<bool>(evaluate(trueExp == (one < exprOne))));
 
         // Pointer + double -> error.
         {
@@ -1653,8 +1661,8 @@ namespace ExpressionTest
         auto expr5PtrDiff = expr10PlusX - exprXPlus5;
         CHECK(5 == std::get<int64_t>(evaluate(expr5PtrDiff)));
 
-        CHECK(true == std::get<bool>(evaluate(expr10PlusX > ptrValid)));
-        CHECK(false == std::get<bool>(evaluate(expr10PlusX < ptrValid)));
+        CHECK(std::get<bool>(evaluate(expr10PlusX > ptrValid)));
+        CHECK_FALSE(std::get<bool>(evaluate(expr10PlusX < ptrValid)));
     }
 
     TEST_CASE("Expression equality", "[expression][codegen]")

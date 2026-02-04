@@ -81,6 +81,13 @@ namespace rocRoller
         AssertFatal(lhs != nullptr);
         AssertFatal(rhs != nullptr);
 
+        auto copier = m_context->copier();
+        co_yield copier->ensureTypeCommutative(
+            {Register::Type::Vector, Register::Type::Scalar},
+            lhs,
+            {Register::Type::Vector, Register::Type::Scalar, Register::Type::Constant},
+            rhs);
+
         co_yield_(Instruction("v_cmp_ne_i32", {dst}, {lhs, rhs}, {}, ""));
     }
 

@@ -63,6 +63,14 @@ std::shared_ptr<rocRoller::ExecutableKernel> AssemblyTestKernel::getExecutableKe
     return m_executableKernel;
 }
 
+void AssemblyTestKernel::operator()(rocRoller::KernelInvocation const& invocation, rocRoller::KernelArguments const& args)
+{
+    REQUIRE_TEST_TAG("gpu");
+    auto kernel = getExecutableKernel();
+
+    kernel->executeKernel(args, invocation);
+}
+
 rocRoller::ContextPtr AssemblyTestKernel::getContext() const
 {
     return m_context;

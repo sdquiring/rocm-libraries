@@ -79,13 +79,19 @@ namespace rocRoller
         auto const& arch = m_context->targetArchitecture();
         auto const& gpu  = arch.target();
 
+        co_yield m_context->copier()->ensureTypeCommutative(
+            {Register::Type::Vector, Register::Type::Constant},
+            lhs,
+            {Register::Type::Vector, Register::Type::Constant},
+            rhs);
+
         if(arch.HasCapability(GPUCapability::HasExplicitNC))
         {
             co_yield_(Instruction("v_add_nc_i32", {dest}, {lhs, rhs}, {}, ""));
         }
         else if(gpu.isCDNAGPU())
         {
-            co_yield_(Instruction("v_add_i32", {dest}, {lhs, rhs}, {}, ""));
+            co_yield_(Instruction("v_add_i32", {dest}, {lhs, rhs}, {}, "It comes from here!"));
         }
         else
         {

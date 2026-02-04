@@ -24,6 +24,8 @@
  *
  *******************************************************************************/
 
+#include "ArithmeticTestKernel.hpp"
+
 #include "CustomMatchers.hpp"
 #include "TestContext.hpp"
 #include "TestKernels.hpp"
@@ -40,196 +42,130 @@
 #include <rocRoller/AssemblyKernel.hpp>
 #include <rocRoller/Expression.hpp>
 
-#include <rocRoller/CodeGen/ArgumentLoader.hpp>
-#include <rocRoller/CodeGen/MemoryInstructions.hpp>
 #include <rocRoller/DataTypes/DataTypes.hpp>
 #include <rocRoller/InstructionValues/Register.hpp>
 #include <rocRoller/Operations/CommandArgument_fwd.hpp>
 
-namespace ArithmeticBinaryTest
+namespace ArithmeticTest
 {
     using namespace rocRoller;
 
-    struct BinaryOp
+    bool validForDivision(std::vector<CommandArgumentValue> operands)
     {
-        std::string name;
-        std::function<Expression::ExpressionPtr(Expression::ExpressionPtr,
-                                                Expression::ExpressionPtr)>
-            createExpression;
-
-        std::function<bool(CommandArgumentValue, CommandArgumentValue)> isValid
-            = [](CommandArgumentValue, CommandArgumentValue) { return true; };
-
-    };
-
-    class BinaryArithmeticTestKernel : public AssemblyTestKernel
-    {
-    public:
-        BinaryArithmeticTestKernel(rocRoller::ContextPtr context)
-            : AssemblyTestKernel(context)
-        {
-        }
-
-        void setRegisterTypes(Register::Type resultRegType,
-                              Register::Type aRegType,
-                              Register::Type bRegType)
-        {
-            m_resultRegType = resultRegType;
-            m_aRegType      = aRegType;
-            m_bRegType      = bRegType;
-        }
-
-        void setDataTypes(DataType resultType, DataType aType, DataType bType)
-        {
-            m_resultType = resultType;
-            m_aType      = aType;
-            m_bType      = bType;
-        }
-
-        void addOp(BinaryOp op)
-        {
-            m_ops.push_back(op);
-        }
-
-        size_t numOps() const
-        {
-            return m_ops.size();
-        }
-
-        std::vector<BinaryOp> const& ops() const
-        {
-            return m_ops;
-        }
-
-        void generate() override
-        {
-            auto k = m_context->kernel();
-
-            k->addArgument(
-                {"result_", {m_resultType, PointerType::PointerGlobal}, DataDirection::WriteOnly});
-            k->addArgument({"a", m_aType});
-            k->addArgument({"b", m_bType});
-
-            m_context->schedule(k->preamble());
-            m_context->schedule(k->prolog());
-
-            auto kb = [&]() -> Generator<Instruction> {
-                Register::ValuePtr resultPtr, a, b;
-                co_yield m_context->argLoader()->getValue("result_", resultPtr);
-                co_yield m_context->argLoader()->getValue("a", a);
-                co_yield m_context->argLoader()->getValue("b", b);
-
-                auto resultReg
-                    = Register::Value::Placeholder(m_context, m_resultRegType, m_resultType, 1);
-
-                co_yield m_context->copier()->ensureType(a, a, m_aRegType);
-                co_yield m_context->copier()->ensureType(b, b, m_bRegType);
-                co_yield m_context->copier()->ensureType(resultPtr, resultPtr, m_resultRegType);
-
-                auto resultInfo = DataTypeInfo::Get(m_resultType);
-
-                for(size_t i = 0; i < m_ops.size(); ++i)
-                {
-                    auto expr = m_ops[i].createExpression(a->expression(), b->expression());
-
-                    co_yield Expression::generate(resultReg, expr, m_context);
-                    co_yield m_context->mem()->store(
-                        m_resultRegType == Register::Type::Scalar
-                            ? MemoryInstructions::MemoryKind::Scalar
-                            : MemoryInstructions::MemoryKind::Global,
-                        resultPtr,
-                        resultReg,
-                        Register::Value::Literal(i * resultInfo.elementBytes),
-                        resultInfo.elementBytes);
-                }
-
-                if(m_resultRegType == Register::Type::Scalar)
-                {
-                    co_yield Instruction::Wait(
-                        WaitCount::DSCnt(m_context->targetArchitecture(), 0));
-                    co_yield Instruction("s_dcache_wb", {}, {}, {}, "");
-                }
-            };
-
-            m_context->schedule(kb());
-            m_context->schedule(k->postamble());
-            m_context->schedule(k->amdgpu_metadata());
-        }
-
-        template <typename ResultType>
-        void runAndValidate_impl(CommandArgumentValue a, CommandArgumentValue b)
-        {
-            auto d_results = make_shared_device<ResultType>(numOps());
-
-            (*this)({}, d_results.get(), a, b);
-            CAPTURE(a, b);
-
-            using ResultValueType
-                = std::conditional_t<std::is_same_v<ResultType, bool>, uint32_t, ResultType>;
-
-            std::vector<ResultValueType> h_results(numOps());
-            REQUIRE_THAT(hipMemcpy(h_results.data(),
-                                   d_results.get(),
-                                   h_results.size() * sizeof(ResultValueType),
-                                   hipMemcpyDeviceToHost),
-                         HasHipSuccess());
-
-            auto aExpr = Expression::literal(a);
-            auto bExpr = Expression::literal(b);
-
-            for(size_t i = 0; i < numOps(); ++i)
+        auto notZero = [](auto const& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr(std::integral<T> || std::floating_point<T>)
             {
-                CAPTURE(i, ops()[i].name);
-                if(ops()[i].isValid(CommandArgumentValue(a), CommandArgumentValue(b)))
-                {
-                    auto expr = convert(m_resultType, ops()[i].createExpression(aExpr, bExpr));
-                    CHECK(Expression::evaluate(expr) == CommandArgumentValue(h_results[i]));
-                }
-            }
-        }
-
-        template <int Index = 0>
-        void runAndValidate_idx(CommandArgumentValue a, CommandArgumentValue b)
-        {
-            using IdxType = std::variant_alternative_t<Index, CommandArgumentValue>;
-
-            if constexpr(CHasTypeInfo<IdxType> && CArithmeticType<IdxType>)
-            {
-                if(TypeInfo<IdxType>::Var.dataType == m_resultType)
-                {
-                    runAndValidate_impl<IdxType>(a, b);
-                    return;
-                }
-            }
-
-            if constexpr(Index + 1 < std::variant_size_v<CommandArgumentValue>)
-            {
-                runAndValidate_idx<Index + 1>(a, b);
+                return arg != 0;
             }
             else
             {
-                FAIL("Invalid DataType for result type: " << m_resultType);
+                return false;
             }
-        }
+        };
 
-        void runAndValidate(CommandArgumentValue a, CommandArgumentValue b)
+        auto withinDivisionDomain = [](auto const& arg) {
+            using T = std::decay_t<decltype(arg)>;
+
+            if constexpr(std::integral<T> && !std::same_as<T, bool>)
+            {
+                using SignedT = typename std::make_signed<T>::type;
+                return arg <= std::numeric_limits<SignedT>::max();
+            }
+            else
+            {
+                return true;
+            }
+        };
+
+        return std::visit(notZero, operands.at(1))
+               && std::visit(withinDivisionDomain, operands.at(0))
+               && std::visit(withinDivisionDomain, operands.at(1));
+    }
+
+    bool validForShift(std::vector<CommandArgumentValue> operands)
+    {
+        auto lhsType = resultVariableType(Expression::literal(operands.at(0)));
+        auto lhsBits = DataTypeInfo::Get(lhsType.dataType).elementBits;
+
+        auto valid = [lhsBits](auto const& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr(std::integral<T>)
+            {
+                return arg > 0 && arg < lhsBits;
+            }
+            else
+            {
+                return false;
+            }
+        };
+
+        return std::visit(valid, operands.at(0)) && std::visit(valid, operands.at(1));
+    }
+
+    std::vector<std::tuple<Register::Type, Register::Type>>
+        inputTypePairs(Register::Type resultRegisterType)
+    {
+        if(resultRegisterType == Register::Type::Scalar)
         {
-            runAndValidate_idx(a, b);
+            return {{Register::Type::Scalar, Register::Type::Scalar}};
+        }
+        else
+        {
+            return {{Register::Type::Scalar, Register::Type::Vector},
+                    {Register::Type::Vector, Register::Type::Scalar},
+                    {Register::Type::Vector, Register::Type::Vector}};
+        }
+    }
+
+    /**
+     * Adds [reg] op [literal] and [literal] op [reg] for the given operation.
+     */
+    void addBothOps(
+        ArithmeticTestKernel&   kernel,
+        DataType                resultDataType,
+        CommandArgumentValue    literalValue,
+        std::string             name,
+        auto                    opFunc,
+        ArithmeticOp::Predicate pred = [](std::vector<CommandArgumentValue>) { return true; })
+    {
+        auto goodLiteralValue = Expression::evaluate(Expression::literal(12, resultDataType));
+
+        auto literalExpression = Expression::literal(literalValue);
+
+        if(pred({literalValue, goodLiteralValue}))
+        {
+            auto predLHS = [literalValue, pred](std::vector<CommandArgumentValue> operands) {
+                operands.insert(operands.begin(), literalValue);
+                return pred(operands);
+            };
+
+            kernel.addOp(ArithmeticOp{
+                name + " LHS Literal",
+                [literalExpression, opFunc](
+                    std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return opFunc(literalExpression, operands.at(0));
+                },
+                predLHS});
         }
 
-    protected:
-        std::vector<BinaryOp> m_ops;
+        if(pred({goodLiteralValue, literalValue}))
+        {
+            auto predLHS = [literalValue, pred](std::vector<CommandArgumentValue> operands) {
+                operands.insert(operands.end(), literalValue);
+                return pred(operands);
+            };
 
-        DataType m_resultType;
-        DataType m_aType;
-        DataType m_bType;
+            kernel.addOp(ArithmeticOp{
+                name + " RHS Literal",
+                [literalExpression, opFunc](
+                    std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return opFunc(operands.at(0), literalExpression);
+                }});
+        }
+    }
 
-        Register::Type m_resultRegType;
-        Register::Type m_aRegType;
-        Register::Type m_bRegType;
-    };
-
-    TEST_CASE("Arithmetic Generators work for integral types",
+    TEST_CASE("Binary Arithmetic Generators work for integral types",
               "[arithmetic][expression][codegen][gpu]")
     {
         auto resultDataType = GENERATE(DataType::Int32, DataType::UInt32);
@@ -238,27 +174,8 @@ namespace ArithmeticBinaryTest
 
         auto resultRegisterType = GENERATE(Register::Type::Scalar, Register::Type::Vector);
 
-        std::vector<Register::Type> aRegisterTypes = {Register::Type::Scalar};
-        if(resultRegisterType == Register::Type::Vector)
-        {
-            aRegisterTypes.push_back(Register::Type::Vector);
-        }
-
-        auto aRegisterType = GENERATE_COPY(from_range(aRegisterTypes));
-
-        std::vector<Register::Type> bRegisterTypes;
-        if(resultRegisterType == Register::Type::Vector)
-        {
-            bRegisterTypes.push_back(Register::Type::Vector);
-            if(aRegisterType == Register::Type::Vector)
-                bRegisterTypes.push_back(Register::Type::Scalar);
-        }
-        else
-        {
-            bRegisterTypes.push_back(Register::Type::Scalar);
-        }
-
-        auto bRegisterType = GENERATE_COPY(from_range(bRegisterTypes));
+        auto [aRegisterType, bRegisterType]
+            = GENERATE_COPY(from_range(inputTypePairs(resultRegisterType)));
 
         DYNAMIC_SECTION("resultDataType=" << resultDataType //
                                           << ", aType=" << aType //
@@ -267,8 +184,6 @@ namespace ArithmeticBinaryTest
                                           << ", aRegisterType=" << aRegisterType //
                                           << ", bRegisterType=" << bRegisterType)
         {
-            CAPTURE(resultDataType, aType, bType, resultRegisterType, aRegisterType, bRegisterType);
-
             auto context = TestContext::ForTestDevice({{.enableFullDivision = true}},
                                                       resultDataType,
                                                       aType,
@@ -279,105 +194,301 @@ namespace ArithmeticBinaryTest
 
             auto k = context->kernel();
 
-            BinaryArithmeticTestKernel kernel(context.get());
-            kernel.setRegisterTypes(resultRegisterType, aRegisterType, bRegisterType);
-            kernel.setDataTypes(resultDataType, aType, bType);
+            ArithmeticTestKernel kernel(context.get(), 2);
+            kernel.setRegisterTypes(resultRegisterType, {aRegisterType, bRegisterType});
+            kernel.setDataTypes(resultDataType, {aType, bType});
 
-            auto validForDivision = [](CommandArgumentValue a, CommandArgumentValue b) {
-                auto notZero = [](auto const& arg) {
-                    using T = std::decay_t<decltype(arg)>;
-                    if constexpr(std::integral<T> || std::floating_point<T>)
-                    {
-                        return arg != 0;
-                    }
-                    else
-                    {
-                        return false;
-                    }
-                };
-
-                auto withinDivisionDomain = [](auto const& arg) {
-                    using T = std::decay_t<decltype(arg)>;
-
-                    if constexpr(std::integral<T> && !std::same_as<T, bool>)
-                    {
-                        using SignedT = typename std::make_signed<T>::type;
-                        return arg <= std::numeric_limits<SignedT>::max();
-                    }
-                    else
-                    {
-                        return true;
-                    }
-                };
-
-                return std::visit(notZero, b) && std::visit(withinDivisionDomain, a)
-                       && std::visit(withinDivisionDomain, b);
-            };
-
-            kernel.addOp(BinaryOp{"Add",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a + b; }});
-            kernel.addOp(BinaryOp{"Subtract",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a - b; }});
-            kernel.addOp(BinaryOp{"Multiply",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a * b; }});
+            kernel.addOp(ArithmeticOp{
+                "Add",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) + operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "Subtract",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) - operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "Multiply",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) * operands.at(1);
+                }});
 
             if(resultDataType == aType && resultDataType == bType)
             {
-                kernel.addOp(BinaryOp{"Divide",
-                                      [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                          -> Expression::ExpressionPtr { return a / b; },
-                                      validForDivision});
-                kernel.addOp(BinaryOp{"Modulo",
-                                      [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                          -> Expression::ExpressionPtr { return a % b; },
-                                      validForDivision});
+                kernel.addOp(ArithmeticOp{
+                    "Divide",
+                    [](std::vector<Expression::ExpressionPtr> operands)
+                        -> Expression::ExpressionPtr { return operands.at(0) / operands.at(1); },
+                    validForDivision});
+                kernel.addOp(ArithmeticOp{
+                    "Modulo",
+                    [](std::vector<Expression::ExpressionPtr> operands)
+                        -> Expression::ExpressionPtr { return operands.at(0) % operands.at(1); },
+                    validForDivision});
 
-                kernel.addOp(BinaryOp{"MultiplyHigh",
-                                      [](Expression::ExpressionPtr a,
-                                         Expression::ExpressionPtr b) -> Expression::ExpressionPtr {
-                                          return multiplyHigh(a, b);
-                                      }});
+                kernel.addOp(ArithmeticOp{"MultiplyHigh",
+                                          [](std::vector<Expression::ExpressionPtr> operands)
+                                              -> Expression::ExpressionPtr {
+                                              return multiplyHigh(operands.at(0), operands.at(1));
+                                          }});
             }
 
-            kernel.addOp(BinaryOp{"ShiftL",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a << b; }});
-            kernel.addOp(BinaryOp{"LogicalShiftR",
-                                  [](Expression::ExpressionPtr a,
-                                     Expression::ExpressionPtr b) -> Expression::ExpressionPtr {
-                                      return logicalShiftR(a, b);
-                                  }});
-            kernel.addOp(BinaryOp{"ArithmeticShiftR",
-                                  [](Expression::ExpressionPtr a,
-                                     Expression::ExpressionPtr b) -> Expression::ExpressionPtr {
-                                      return arithmeticShiftR(a, b);
-                                  }});
+            kernel.addOp(ArithmeticOp{
+                "ShiftL",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) << operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "LogicalShiftR",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return logicalShiftR(operands.at(0), operands.at(1));
+                }});
+            kernel.addOp(ArithmeticOp{
+                "ArithmeticShiftR",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return arithmeticShiftR(operands.at(0), operands.at(1));
+                }});
 
-            kernel.addOp(BinaryOp{"BitwiseAnd",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a & b; }});
-            kernel.addOp(BinaryOp{"BitwiseOr",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a | b; }});
-            kernel.addOp(BinaryOp{"BitwiseXor",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a ^ b; }});
+            kernel.addOp(ArithmeticOp{
+                "BitwiseAnd",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) & operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "BitwiseOr",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) | operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "BitwiseXor",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) ^ operands.at(1);
+                }});
 
             REQUIRE_NOTHROW(kernel.getAssembledKernel());
             for(auto a : TestValues::byType(aType))
             {
                 for(auto b : TestValues::byType(bType))
                 {
-                    kernel.runAndValidate(a, b);
+                    kernel.runAndValidate({a, b});
                 }
             }
         }
     }
 
-    TEST_CASE("Arithmetic Generators work for floating point types",
+    TEST_CASE("Binary Arithmetic Generators work for integral types with literal operands.",
+              "[arithmetic][literal][expression][codegen][gpu]")
+    {
+        auto resultDataType  = GENERATE(DataType::Int32, DataType::UInt32);
+        auto operandDataType = GENERATE(DataType::Int32, DataType::UInt32);
+
+        auto registerType = GENERATE(Register::Type::Scalar, Register::Type::Vector);
+
+        CommandArgumentValue literalValue
+            = GENERATE_COPY(from_range(TestValues::byType(resultDataType)));
+
+        DYNAMIC_SECTION("resultDataType=" << resultDataType //
+                                          << ", operandDataType=" << operandDataType //
+                                          << ", registerType=" << registerType //
+                                          << ", literalValue=" << literalValue)
+        {
+            auto context = TestContext::ForTestDevice({{.enableFullDivision = true}},
+                                                      resultDataType,
+                                                      operandDataType,
+                                                      registerType,
+                                                      literalValue);
+
+            ArithmeticTestKernel kernel(context.get(), 1);
+            kernel.setRegisterTypes(registerType, {registerType});
+            kernel.setDataTypes(resultDataType, {operandDataType});
+
+            using BinaryOpFunc = Expression::ExpressionPtr (*)(Expression::ExpressionPtr,
+                                                               Expression::ExpressionPtr);
+
+            addBothOps(kernel, resultDataType, literalValue, "Add", Expression::operator+);
+            addBothOps(kernel,
+                       resultDataType,
+                       literalValue,
+                       "Subtract",
+                       static_cast<BinaryOpFunc>(Expression::operator-));
+            addBothOps(kernel, resultDataType, literalValue, "Multiply", Expression::operator*);
+
+            if(resultDataType == operandDataType)
+            {
+                addBothOps(kernel,
+                           resultDataType,
+                           literalValue,
+                           "Divide",
+                           Expression::operator/,
+                           validForDivision);
+                addBothOps(kernel,
+                           resultDataType,
+                           literalValue,
+                           "Modulo",
+                           Expression::operator%,
+                           validForDivision);
+
+                addBothOps(
+                    kernel, resultDataType, literalValue, "MultiplyHigh", Expression::multiplyHigh);
+            }
+
+            addBothOps(kernel, resultDataType, literalValue, "BitwiseAnd", Expression::operator&);
+            addBothOps(kernel, resultDataType, literalValue, "BitwiseOr", Expression::operator|);
+            addBothOps(kernel, resultDataType, literalValue, "BitwiseXor", Expression::operator^);
+
+            addBothOps(kernel,
+                       resultDataType,
+                       literalValue,
+                       "ShiftL",
+                       static_cast<BinaryOpFunc>(Expression::operator<<),
+                       validForShift);
+            addBothOps(kernel,
+                       resultDataType,
+                       literalValue,
+                       "LogicalShiftR",
+                       Expression::logicalShiftR,
+                       validForShift);
+            addBothOps(kernel,
+                       resultDataType,
+                       literalValue,
+                       "ArithmeticShiftR",
+                       Expression::arithmeticShiftR,
+                       validForShift);
+
+            REQUIRE_NOTHROW(kernel.getAssembledKernel());
+            for(auto operand : TestValues::byType(operandDataType))
+            {
+                kernel.runAndValidate({operand});
+            }
+        }
+    }
+
+    TEST_CASE("Binary Comparison Generators work for integral types",
+              "[arithmetic][expression][codegen][gpu]")
+    {
+        auto resultDataType = GENERATE(DataType::Bool, DataType::Bool64);
+        auto operandType    = GENERATE(DataType::Int32, DataType::UInt32);
+
+        auto resultRegisterType = Register::Type::Scalar;
+
+        auto [aRegisterType, bRegisterType] = GENERATE_COPY(from_range(inputTypePairs(
+            resultDataType == DataType::Bool ? Register::Type::Scalar : Register::Type::Vector)));
+
+        DYNAMIC_SECTION("resultDataType=" << resultDataType //
+                                          << ", operandType=" << operandType //
+                                          << ", resultRegisterType=" << resultRegisterType //
+                                          << ", aRegisterType=" << aRegisterType //
+                                          << ", bRegisterType=" << bRegisterType)
+        {
+            auto context = TestContext::ForTestDevice({{.enableFullDivision = true}},
+                                                      resultDataType,
+                                                      operandType,
+                                                      resultRegisterType,
+                                                      aRegisterType,
+                                                      bRegisterType);
+
+            CAPTURE(context->assemblyFileName());
+
+            ArithmeticTestKernel kernel(context.get(), 2);
+            kernel.setRegisterTypes(resultRegisterType, {aRegisterType, bRegisterType});
+            kernel.setDataTypes(resultDataType, {operandType, operandType});
+
+            kernel.setStoreType(resultDataType == DataType::Bool64 ? DataType::UInt64
+                                                                   : DataType::UInt32);
+
+            kernel.addOp(ArithmeticOp{
+                "Equal",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) == operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "NotEqual",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) != operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "GreaterThan",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) > operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "GreaterThanEqual",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) >= operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "LessThan",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) < operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "LessThanEqual",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) <= operands.at(1);
+                }});
+
+            for(auto a : TestValues::byType(operandType))
+            {
+                for(auto b : TestValues::byType(operandType))
+                {
+                    kernel.runAndValidate({a, b});
+                }
+            }
+        }
+    }
+
+    TEST_CASE("Binary Comparison Generators work for integral types with literal operands.",
+              "[arithmetic][literal][expression][codegen][gpu]")
+    {
+        auto resultDataType  = GENERATE(DataType::Bool, DataType::Bool64);
+        auto operandDataType = GENERATE(DataType::Int32, DataType::UInt32);
+
+        auto resultRegisterType = Register::Type::Scalar;
+
+        auto inputRegisterType = resultDataType == DataType::Bool ? Register::Type::Scalar : Register::Type::Vector;
+
+        CommandArgumentValue literalValue
+            = GENERATE_COPY(from_range(TestValues::byType(operandDataType)));
+
+        DYNAMIC_SECTION("resultDataType=" << resultDataType //
+                                          << ", operandDataType=" << operandDataType //
+                                          << ", resultRegisterType=" << resultRegisterType //
+                                          << ", inputRegisterType=" << inputRegisterType //
+                                          << ", literalValue=" << literalValue)
+        {
+            auto context = TestContext::ForTestDevice({{.enableFullDivision = true}},
+                                                      resultDataType,
+                                                      operandDataType,
+                                                      resultRegisterType,
+                                                      inputRegisterType);
+
+            ArithmeticTestKernel kernel(context.get(), 1);
+            kernel.setRegisterTypes(resultRegisterType, {inputRegisterType});
+            kernel.setDataTypes(resultDataType, {operandDataType});
+            
+            auto storeType = resultDataType == DataType::Bool64 ? DataType::UInt64
+                                                                   : DataType::UInt32;
+            kernel.setStoreType(storeType);
+
+            addBothOps(kernel, storeType, literalValue, "Equal", Expression::operator==);
+            addBothOps(kernel, storeType, literalValue, "NotEqual", Expression::operator!=);
+            addBothOps(kernel, storeType, literalValue, "GreaterThan", Expression::operator>);
+            addBothOps(kernel, storeType, literalValue, "GreaterThanEqual", Expression::operator>=);
+            addBothOps(kernel, storeType, literalValue, "LessThan", Expression::operator<);
+            addBothOps(kernel, storeType, literalValue, "LessThanEqual", Expression::operator<=);
+
+            REQUIRE_NOTHROW(kernel.getAssembledKernel());
+
+            for(auto value: TestValues::byType(operandDataType))
+            {
+                kernel.runAndValidate({value});
+            }
+
+        }
+    }
+
+    TEST_CASE("Binary Arithmetic Generators work for floating point types",
               "[arithmetic][expression][codegen][gpu]")
     {
         auto dataType = GENERATE(DataType::Float, DataType::Double);
@@ -403,12 +514,10 @@ namespace ArithmeticBinaryTest
         auto bRegisterType = GENERATE_COPY(from_range(bRegisterTypes));
 
         DYNAMIC_SECTION("dataType=" << dataType //
-                                          << ", resultRegisterType=" << resultRegisterType //
-                                          << ", aRegisterType=" << aRegisterType //
-                                          << ", bRegisterType=" << bRegisterType)
+                                    << ", resultRegisterType=" << resultRegisterType //
+                                    << ", aRegisterType=" << aRegisterType //
+                                    << ", bRegisterType=" << bRegisterType)
         {
-            CAPTURE(dataType, resultRegisterType, aRegisterType, bRegisterType);
-
             auto context = TestContext::ForTestDevice({{.enableFullDivision = true}},
                                                       dataType,
                                                       resultRegisterType,
@@ -417,29 +526,34 @@ namespace ArithmeticBinaryTest
 
             auto k = context->kernel();
 
-            BinaryArithmeticTestKernel kernel(context.get());
-            kernel.setRegisterTypes(resultRegisterType, aRegisterType, bRegisterType);
-            kernel.setDataTypes(dataType, dataType, dataType);
+            ArithmeticTestKernel kernel(context.get(), 2);
+            kernel.setRegisterTypes(resultRegisterType, {aRegisterType, bRegisterType});
+            kernel.setDataTypes(dataType, {dataType, dataType});
 
-            kernel.addOp(BinaryOp{"Add",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a + b; }});
-            kernel.addOp(BinaryOp{"Subtract",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a - b; }});
-            kernel.addOp(BinaryOp{"Multiply",
-                                  [](Expression::ExpressionPtr a, Expression::ExpressionPtr b)
-                                      -> Expression::ExpressionPtr { return a * b; }});
+            kernel.addOp(ArithmeticOp{
+                "Add",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) + operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "Subtract",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) - operands.at(1);
+                }});
+            kernel.addOp(ArithmeticOp{
+                "Multiply",
+                [](std::vector<Expression::ExpressionPtr> operands) -> Expression::ExpressionPtr {
+                    return operands.at(0) * operands.at(1);
+                }});
 
             REQUIRE_NOTHROW(kernel.getAssembledKernel());
             for(auto a : TestValues::byType(dataType))
             {
                 for(auto b : TestValues::byType(dataType))
                 {
-                    kernel.runAndValidate(a, b);
+                    kernel.runAndValidate({a, b});
                 }
             }
         }
     }
-
 }

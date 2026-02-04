@@ -408,6 +408,57 @@ namespace rocRoller
                                              Register::ValuePtr&        rhs) const
 
     {
+        #if 1
+
+        auto context = m_context.lock();
+        auto copier = context->copier();
+
+        auto isSupported = [context](EnumBitset<Register::Type> types, Register::ValuePtr value) {
+            return types[value->regType()] || (types[Register::Type::Constant] && context->targetArchitecture().isSupportedConstantValue(value));
+        };
+
+        auto lhsIsSupported = isSupported(lhsTypes, lhs);
+        auto rhsIsSupported = isSupported(rhsTypes, rhs);
+
+        if(lhsIsSupported && rhsIsSupported)
+        {
+            co_return;
+        }
+
+        auto lhsSupportsSwap = isSupported(rhsTypes, lhs);
+        auto rhsSupportsSwap = isSupported(lhsTypes, rhs);
+
+        if(lhsSupportsSwap && rhsSupportsSwap)
+        {
+            std::swap(lhs, rhs);
+            co_return;
+        }
+
+        if(lhsSupportsSwap)
+        {
+            co_yield copier->ensureType(rhs, rhs, lhsTypes);
+            std::swap(lhs, rhs);
+            co_return;
+        }
+
+        if(rhsSupportsSwap)
+        {
+            co_yield copier->ensureType(lhs, lhs, rhsTypes);
+            std::swap(lhs, rhs);
+            co_return;
+        }
+
+        {
+            co_yield context->copier()->ensureType(lhs, lhs, lhsTypes);
+            co_yield context->copier()->ensureType(rhs, rhs, rhsTypes);
+
+            // Register::ValuePtr vgpr = rhs;
+            // rhs = Register::Value::Placeholder(context, Register::Type::Vector, vgpr->variableType(), 1);
+            // co_yield context->copier()->copy(rhs, vgpr, "");
+        }
+        
+
+        #else
         //
         // If rhs is a literal/constant but the rhs operand type does not allow literal/constant,
         // either
@@ -453,6 +504,7 @@ namespace rocRoller
                 co_yield context->copier()->copy(rhs, vgpr, "");
             }
         }
+        #endif
     }
 
     inline Generator<Instruction> CopyGenerator::pack(Register::ValuePtr              dest,

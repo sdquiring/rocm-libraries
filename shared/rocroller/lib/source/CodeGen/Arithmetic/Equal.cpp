@@ -58,8 +58,8 @@ namespace rocRoller
 
         if(dst != nullptr && !dst->isSCC())
         {
-            co_yield(Instruction::Lock(Scheduling::Dependency::SCC,
-                                       "Start Compare writing to non-SCC dest"));
+            co_yield (Instruction::Lock(Scheduling::Dependency::SCC,
+                                        "Start Compare writing to non-SCC dest"));
         }
 
         // note s_cmp_eq_i32 and s_cmp_eq_u32 are same op-codes, both are
@@ -69,7 +69,7 @@ namespace rocRoller
         if(dst != nullptr && !dst->isSCC())
         {
             co_yield m_context->copier()->copy(dst, m_context->getSCC(), "");
-            co_yield(Instruction::Unlock("End Compare writing to non-SCC dest"));
+            co_yield (Instruction::Unlock("End Compare writing to non-SCC dest"));
         }
     }
 
@@ -82,6 +82,13 @@ namespace rocRoller
     {
         AssertFatal(lhs != nullptr);
         AssertFatal(rhs != nullptr);
+
+        auto copier = m_context->copier();
+        co_yield copier->ensureTypeCommutative(
+            {Register::Type::Vector, Register::Type::Scalar},
+            lhs,
+            {Register::Type::Vector, Register::Type::Scalar, Register::Type::Constant},
+            rhs);
 
         co_yield_(Instruction("v_cmp_eq_i32", {dst}, {lhs, rhs}, {}, ""));
     }
@@ -98,8 +105,8 @@ namespace rocRoller
 
         if(dst != nullptr && !dst->isSCC())
         {
-            co_yield(Instruction::Lock(Scheduling::Dependency::SCC,
-                                       "Start Compare writing to non-SCC dest"));
+            co_yield (Instruction::Lock(Scheduling::Dependency::SCC,
+                                        "Start Compare writing to non-SCC dest"));
         }
 
         co_yield_(Instruction("s_cmp_eq_u64", {}, {lhs, rhs}, {}, ""));
@@ -107,7 +114,7 @@ namespace rocRoller
         if(dst != nullptr && !dst->isSCC())
         {
             co_yield m_context->copier()->copy(dst, m_context->getSCC(), "");
-            co_yield(Instruction::Unlock("End Compare writing to non-SCC dest"));
+            co_yield (Instruction::Unlock("End Compare writing to non-SCC dest"));
         }
     }
 

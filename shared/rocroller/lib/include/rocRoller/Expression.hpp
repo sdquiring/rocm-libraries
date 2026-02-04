@@ -26,12 +26,9 @@
 
 #pragma once
 
-#include <bitset>
-#include <memory>
-#include <stack>
+#include <rocRoller/Expression_fwd.hpp>
 
 #include <rocRoller/CodeGen/Instruction.hpp>
-#include <rocRoller/Expression_fwd.hpp>
 #include <rocRoller/InstructionValues/Register_fwd.hpp>
 #include <rocRoller/Operations/CommandArgument_fwd.hpp>
 #include <rocRoller/Utilities/EnumBitset.hpp>
@@ -659,14 +656,20 @@ namespace rocRoller
         ExpressionPtr operator%(ExpressionPtr a, ExpressionPtr b);
         ExpressionPtr operator<<(ExpressionPtr a, ExpressionPtr b);
         ExpressionPtr operator>>(ExpressionPtr a, ExpressionPtr b);
-        ExpressionPtr operator&(ExpressionPtr a, ExpressionPtr b);
+
         ExpressionPtr operator>(ExpressionPtr a, ExpressionPtr b);
         ExpressionPtr operator>=(ExpressionPtr a, ExpressionPtr b);
         ExpressionPtr operator<(ExpressionPtr a, ExpressionPtr b);
         ExpressionPtr operator<=(ExpressionPtr a, ExpressionPtr b);
         ExpressionPtr operator==(ExpressionPtr a, ExpressionPtr b);
+        ExpressionPtr operator!=(ExpressionPtr a, ExpressionPtr b);
+
         ExpressionPtr operator&&(ExpressionPtr a, ExpressionPtr b);
         ExpressionPtr operator||(ExpressionPtr a, ExpressionPtr b);
+
+        ExpressionPtr operator&(ExpressionPtr a, ExpressionPtr b);
+        ExpressionPtr operator|(ExpressionPtr a, ExpressionPtr b);
+        ExpressionPtr operator^(ExpressionPtr a, ExpressionPtr b);
 
         ExpressionPtr operator-(ExpressionPtr a);
         ExpressionPtr logicalNot(ExpressionPtr a);
