@@ -51,22 +51,151 @@ namespace rocRoller
                 }
                 for(auto& dsts : queue.second)
                 {
-                    m_instructionQueues[queue.first].emplace_back(
-                        std::vector<Register::RegisterId>{});
+                    std::set<Register::RegisterId> dstSet;
+
                     for(auto& dst : dsts)
                     {
                         if(dst)
                         {
                             for(auto& regid : dst->getRegisterIds())
                             {
-                                m_instructionQueues[queue.first]
-                                                   [m_instructionQueues[queue.first].size() - 1]
-                                                       .emplace_back(regid);
+                                dstSet.insert(regid);
                             }
+                        }
+                    }
+
+                    m_instructionQueues[queue.first].push_back(std::move(dstSet));
+                }
+            }
+        }
+
+        bool safeToBranchTo(WaitcntState const& labelState,
+                            WaitcntState const& branchState,
+                            std::string const&  label,
+                            std::string*        explanation)
+        {
+            bool rv = true;
+
+            auto explain = [&explanation, &label]<typename... Args>(fmt::format_string<Args...> fmt,
+                                                                    Args&&... args) {
+                if(explanation != nullptr)
+                {
+                    *explanation += fmt::format("Label {}: ", label)
+                                    + fmt::format(fmt, std::forward<Args>(args)...);
+                }
+            };
+
+            for(auto const& [branchQueue, branchNeedsWaitZero] : branchState.m_needsWaitZero)
+            {
+                if(branchNeedsWaitZero)
+                {
+                    auto labelNeedsWaitZero = labelState.m_needsWaitZero.find(branchQueue);
+                    if(labelNeedsWaitZero == labelState.m_needsWaitZero.end()
+                       || !labelNeedsWaitZero->second)
+                    {
+                        if(explanation == nullptr)
+                            return false;
+                        rv = false;
+                        explain("Queue {} needs a wait zero in the branch state but not in the "
+                                "label state.\n",
+                                branchQueue.toString());
+                    }
+                }
+            }
+
+            for(auto const& [branchQueue, branchTypeInQueue] : branchState.m_typeInQueue)
+            {
+                if(branchTypeInQueue != GPUWaitQueueType::None)
+                {
+                    auto labelTypeInQueue = labelState.m_typeInQueue.find(branchQueue);
+                    if(labelTypeInQueue == labelState.m_typeInQueue.end())
+                    {
+                        if(explanation == nullptr)
+                            return false;
+                        rv = false;
+                        explain(
+                            "Queue {} has a {} in the branch state but not in the label state.\n",
+                            branchQueue.toString(),
+                            branchTypeInQueue.toString());
+                    }
+                    else if(labelTypeInQueue->second != branchTypeInQueue)
+                    {
+                        if(explanation == nullptr)
+                            return false;
+                        rv = false;
+                        explain("Queue {} has a different type in the branch state {} than the "
+                                "label state {}.\n",
+                                branchQueue.toString(),
+                                branchTypeInQueue.toString(),
+                                labelTypeInQueue->second.toString());
+                    }
+                }
+            }
+
+            for(auto const& [branchQueue, branchInstructions] : branchState.m_instructionQueues)
+            {
+                auto labelQueue = labelState.m_instructionQueues.find(branchQueue);
+                if(labelQueue == labelState.m_instructionQueues.end())
+                {
+                    if(explanation == nullptr)
+                        return false;
+                    rv = false;
+                    explain("Queue {} is in the branch state but not in the label state.\n",
+                            branchQueue.toString());
+                }
+                else
+                {
+                    auto branchQueueIter = branchInstructions.begin();
+                    for(auto labelQueueIter = labelQueue->second.begin();
+                        branchQueueIter != branchInstructions.end()
+                        && labelQueueIter != labelQueue->second.end();
+                        ++branchQueueIter, ++labelQueueIter)
+                    {
+                        std::vector<Register::RegisterId> extraBranchRegisters;
+
+                        std::ranges::set_difference(branchQueueIter->begin(),
+                                                    branchQueueIter->end(),
+                                                    labelQueueIter->begin(),
+                                                    labelQueueIter->end(),
+                                                    std::back_inserter(extraBranchRegisters));
+
+                        if(!extraBranchRegisters.empty())
+                        {
+                            if(explanation == nullptr)
+                                return false;
+                            rv = false;
+                            auto asString
+                                = extraBranchRegisters | std::views::transform([](auto const& reg) {
+                                      return reg.toString();
+                                  });
+                            explain("Queue {} has extra registers at the branch state but not in "
+                                    "the label state:\n",
+                                    branchQueue.toString(),
+                                    fmt::join(asString, ", "));
+                        }
+                    }
+
+                    for(; branchQueueIter != branchInstructions.end(); ++branchQueueIter)
+                    {
+                        if(!branchQueueIter->empty())
+                        {
+                            if(explanation == nullptr)
+                                return false;
+                            rv = false;
+                            auto asString
+                                = *branchQueueIter | std::views::transform([](auto const& reg) {
+                                      return reg.toString();
+                                  });
+                            explain("Queue {} has extra registers at the branch state but not in "
+                                    "the label state:\n",
+                                    branchQueue.toString(),
+                                    fmt::join(asString, ", "));
                         }
                     }
                 }
             }
+
+            return rv;
         }
 
         void WaitcntState::assertSafeToBranchTo(const WaitcntState& labelState,
@@ -75,6 +204,24 @@ namespace rocRoller
             if(*this == labelState)
                 return;
 
+            std::unique_ptr<std::string> explanation;
+            if(Log::getLogger()->should_log(LogLevel::Error))
+            {
+                explanation = std::make_unique<std::string>();
+            }
+
+            bool safe = safeToBranchTo(labelState, *this, label, explanation.get());
+
+            if(explanation->empty())
+            {
+                explanation = std::make_unique<std::string>();
+            }
+
+            AssertFatal(safe,
+                        "Branching to label '" + label + "' with a different waitcnt state.\n"
+                            + *explanation);
+
+#if 0
             bool fail = false;
 
             // In Debug mode, defer throwing the exception until we have
@@ -133,6 +280,8 @@ namespace rocRoller
                 }
             }
             AssertFatal(!fail, msg);
+
+#endif
         }
 
         WaitcntObserver::WaitcntObserver() = default;

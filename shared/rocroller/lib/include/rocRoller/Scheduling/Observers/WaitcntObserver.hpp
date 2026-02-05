@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <rocRoller/Scheduling/Observers/WaitcntObserver_fwd.hpp>
+
 #include <rocRoller/CodeGen/Instruction.hpp>
 #include <rocRoller/Context.hpp>
 #include <rocRoller/GPUArchitecture/GPUInstructionInfo.hpp>
@@ -41,6 +43,20 @@ namespace rocRoller
         using WaitQueueRegisters = std::array<Register::ValuePtr, Instruction::MaxExtraRegisters>;
 
         using WaitCntQueues = WaitQueueMap<std::vector<WaitQueueRegisters>>;
+
+        
+        /**
+         * @brief This function determines if it is safe to branch to a label from a given branch state.
+         *
+         * This means that every restriction regarding the label state must also be present in the branch state, but not necessarily vice versa.
+         * 
+         * @param labelState the waitcnt state at the label.
+         * @param branchState the waitcnt state at the branch.
+         * @param label the label to branch to.
+         * @param explanation an optional explanation of why the branch is safe or not.
+         * @return true if the branch is safe, false otherwise.
+         */
+        bool safeToBranchTo(WaitcntState const& labelState, WaitcntState const& branchState, std::string const& label, std::string* explanation = nullptr);
 
         /**
          * @brief This struct is used to store the _unallocated_ state of the waitcnt queues.
@@ -71,10 +87,12 @@ namespace rocRoller
             // std::vector<Register::RegisterId> for the registers instead of
             // std::array<Register::ValuePtr, Instruction::MaxDstRegisters>
             // so that we don't maintain the allocations.
-            WaitQueueMap<std::vector<std::vector<Register::RegisterId>>> m_instructionQueues;
+            WaitQueueMap<std::vector<std::set<Register::RegisterId>>> m_instructionQueues;
 
             WaitQueueMap<bool>             m_needsWaitZero;
             WaitQueueMap<GPUWaitQueueType> m_typeInQueue;
+
+            friend bool safeToBranchTo(WaitcntState const& labelState, WaitcntState const& branchState, std::string const& label, std::string* explanation);
         };
 
         class WaitcntObserver

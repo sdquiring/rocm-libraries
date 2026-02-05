@@ -31,14 +31,6 @@
 
 #include <rocRoller/AssemblyKernel.hpp>
 #include <rocRoller/KernelGraph/ControlGraph/ControlFlowArgumentTracer.hpp>
-// #include <rocRoller/CommandSolution.hpp>
-// #include <rocRoller/Expression.hpp>
-// #include <rocRoller/ExpressionTransformations.hpp>
-
-// #include <rocRoller/KernelGraph/KernelGraph.hpp>
-// #include <rocRoller/KernelGraph/Visitors.hpp>
-
-// #include <rocRoller/Operations/Command.hpp>
 
 namespace rocRoller
 {

@@ -1567,7 +1567,7 @@ namespace rocRollerTest
         m_context->schedule(instlabel);
 
         auto inst_end = Instruction("s_endpgm", {}, {}, {}, "");
-        EXPECT_THROW(m_context->schedule(inst_end), FatalError);
+        EXPECT_NO_THROW(m_context->schedule(inst_end));
     }
 
     TEST_F(WaitCountObserverTest, Direct2LDSWaitCount)
