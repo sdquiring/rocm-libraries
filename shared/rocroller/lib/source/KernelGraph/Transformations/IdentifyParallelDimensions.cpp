@@ -378,6 +378,7 @@ namespace rocRoller
                 if(subdims.empty())
                 {
                     Log::debug("  No SubDimensions found via Split or Join edges");
+                    Log::debug("  User may be scratch space (LDS tensors created later by AddLDS)");
                     continue;
                 }
 
