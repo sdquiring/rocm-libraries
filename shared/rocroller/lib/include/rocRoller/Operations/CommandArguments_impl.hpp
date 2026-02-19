@@ -42,7 +42,7 @@ namespace rocRoller
             return "Size";
         case ArgumentType::Stride:
             return "Stride";
-        default:
+        case ArgumentType::Count:
             break;
         }
         throw std::runtime_error("Invalid ArgumentType");

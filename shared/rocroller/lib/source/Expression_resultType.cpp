@@ -231,6 +231,7 @@ namespace rocRoller
                     // a context.
                     // Throw<FatalError>("Need context to determine wavefront size", ShowValue(name(expr)));
                     return {Register::Type::Scalar, DataType::None};
+
                 default:
                     break;
                 }
@@ -353,6 +354,7 @@ namespace rocRoller
                     case Register::Type::Scalar:
                     case Register::Type::Vector:
                         break;
+
                     default:
                         Throw<FatalError>(
                             "Invalid register type for concatenate expression operands",

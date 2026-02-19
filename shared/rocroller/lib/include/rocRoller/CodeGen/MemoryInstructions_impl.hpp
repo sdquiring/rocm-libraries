@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "rocRoller/Utilities/Error.hpp"
 #include <rocRoller/CodeGen/MemoryInstructions.hpp>
 
 #include <rocRoller/KernelOptions_detail.hpp>
@@ -103,8 +104,9 @@ namespace rocRoller
             co_yield bufferLoad2LDS(newAddr->subset({0}), bufDesc, buffOpts, numBytes, offset);
 
             break;
-        default:
-            throw std::runtime_error("Load not supported for provided Memorykind");
+
+        case MemoryKind::Count:
+            Throw<FatalError>("Load not supported for provided Memorykind");
         }
     }
 
@@ -162,8 +164,9 @@ namespace rocRoller
             co_yield storeScalar(newAddr, data, offsetVal, numBytes, buffOpts.glc);
             break;
 
-        default:
-            throw std::runtime_error("Store not supported for provided Memorykind");
+        case MemoryKind::Buffer2LDS:
+        case MemoryKind::Count:
+            Throw<FatalError>("Store not supported for provided MemoryKind ", kind);
         }
     }
 

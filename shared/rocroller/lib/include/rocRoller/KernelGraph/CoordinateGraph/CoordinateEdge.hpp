@@ -65,7 +65,7 @@ namespace rocRoller
                 return "DataFlow";
             case EdgeType::Any:
                 return "Any";
-            default:
+            case EdgeType::Count:
                 break;
             }
             Throw<FatalError>("Invalid EdgeType");

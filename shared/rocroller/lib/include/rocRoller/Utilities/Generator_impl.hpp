@@ -50,7 +50,6 @@ namespace rocRoller
             return "Done";
 
         case GeneratorState::Count:
-        default:
             break;
         }
         throw std::runtime_error("Invalid GeneratorState");
@@ -219,13 +218,9 @@ namespace rocRoller
     auto Generator<T>::Iterator::operator++() -> Iterator&
     {
         // If the iterator was previously incremented but not dereferenced, pretend we've dereferenced it for consistency.
-        switch(state())
+        if(state() == GeneratorState::HasRange || state() == GeneratorState::NoValue)
         {
-        case GeneratorState::HasRange:
-        case GeneratorState::NoValue:
             get();
-        default:
-            break;
         }
 
         switch(state())
@@ -247,7 +242,7 @@ namespace rocRoller
             break;
 
         case GeneratorState::Done:
-        default:
+        case GeneratorState::Count:
             break;
         }
         return *this;

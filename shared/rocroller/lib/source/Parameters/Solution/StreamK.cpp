@@ -42,7 +42,8 @@ namespace rocRoller
             return "TwoTile";
         case StreamKMode::TwoTileDPFirst:
             return "TwoTileDPFirst";
-        default:
+
+        case StreamKMode::Count:
             break;
         }
         return "Invalid";

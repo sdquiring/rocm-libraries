@@ -45,24 +45,31 @@ namespace rocRoller
             {
             case LogLevel::Trace:
                 return spdlog::level::level_enum::trace;
+
             case LogLevel::Debug:
                 return spdlog::level::level_enum::debug;
+
             case LogLevel::Verbose:
             case LogLevel::Info:
                 return spdlog::level::level_enum::info;
+
             case LogLevel::Terse:
                 // does not correspond to a spdlog log level
                 // fall through to less verbose option
             case LogLevel::Warning:
                 return spdlog::level::level_enum::warn;
+
             case LogLevel::Error:
                 return spdlog::level::level_enum::err;
+
             case LogLevel::Critical:
                 return spdlog::level::level_enum::critical;
+
             case LogLevel::None:
-            default:
-                return spdlog::level::level_enum::off;
+            case LogLevel::Count:
+                break;
             }
+                return spdlog::level::level_enum::off;
         }
 
         bool initLogger()

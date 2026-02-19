@@ -84,7 +84,7 @@ namespace rocRoller
                             return {(size_t)0, (size_t)1};
                         case TransposeType::N:
                             return {(size_t)1};
-                        default:
+                        case TransposeType::Count:
                             Throw<FatalError>("Bad transpose option");
                         }
                     };

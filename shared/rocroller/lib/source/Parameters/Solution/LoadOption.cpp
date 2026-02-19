@@ -67,10 +67,16 @@ namespace rocRoller
                 case LoadPath::BufferToLDS:
                 case LoadPath::GlobalToLDSViaVGPR:
                     return true;
-                default:
-                    break;
+
+                case LoadPath::BufferToVGPR:
+                case LoadPath::GlobalToVGPR:
+                    return false;
+                
+                case LoadPath::Count:
+                break;
                 }
-                return false;
+
+                Throw<FatalError>("Invalid LoadPath ", mode);
             }
 
             std::string toString(LoadPath mode)
@@ -87,7 +93,8 @@ namespace rocRoller
                     return "GlobalToVGPR";
                 case LoadPath::GlobalToLDSViaVGPR:
                     return "GlobalToLDSViaVGPR";
-                default:
+
+                case LoadPath::Count:
                     break;
                 }
                 return "Invalid";

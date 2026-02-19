@@ -67,9 +67,11 @@ namespace rocRoller
             return "gfx1200";
         case GPUArchitectureGFX::GFX1201:
             return "gfx1201";
-        default:
-            return "gfxunknown";
+        case rocRoller::GPUArchitectureGFX::UNKNOWN:
+        case GPUArchitectureGFX::Count:
+        break;
         }
+            return "gfxunknown";
     }
 
     inline std::ostream& operator<<(std::ostream& stream, GPUArchitectureGFX const& gfx)
@@ -89,6 +91,8 @@ namespace rocRoller
             return "AMD CDNA 3";
         case GPUArchitectureGFX::GFX950:
             return "AMD CDNA 4";
+        case GPUArchitectureGFX::GFX1010:
+        case GPUArchitectureGFX::GFX1011:
         case GPUArchitectureGFX::GFX1012:
             return "AMD RDNA 1";
         case GPUArchitectureGFX::GFX1030:
@@ -96,9 +100,11 @@ namespace rocRoller
         case GPUArchitectureGFX::GFX1200:
         case GPUArchitectureGFX::GFX1201:
             return "AMD RDNA 4";
-        default:
-            return "unknown";
+        case GPUArchitectureGFX::UNKNOWN:
+        case GPUArchitectureGFX::Count:
+        break;
         }
+            return "unknown";
     }
 
     inline std::string GPUArchitectureFeatures::toString() const

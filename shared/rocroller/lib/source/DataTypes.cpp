@@ -48,7 +48,6 @@ namespace rocRoller
         case DataDirection::ReadWrite:
             return "read_write";
         case DataDirection::Count:
-        default:
             break;
         }
         throw std::runtime_error("Invalid DataDirection");
@@ -133,7 +132,9 @@ namespace rocRoller
             return "E8M0x4";
         case DataType::None:
             return "None";
-        case DataType::Count:;
+
+        case DataType::Count:
+            break;
         }
         return "Invalid";
     }
@@ -417,12 +418,10 @@ namespace rocRoller
         case PointerType::Buffer:
             return 16;
 
-        default:
         case PointerType::Count:
             break;
         }
-        throw std::runtime_error(
-            concatenate("Invalid pointer type: ", static_cast<int>(pointerType)));
+        Throw<FatalError>("Invalid pointer type: ", static_cast<int>(pointerType));
     }
 
     VariableType VariableType::Promote(VariableType lhs, VariableType rhs)

@@ -46,7 +46,6 @@ namespace rocRoller::KernelGraph::ControlGraph
             return "RightFirst";
 
         case NodeOrdering::Count:
-        default:
             break;
         }
         Throw<FatalError>("Invalid NodeOrdering");
@@ -67,7 +66,7 @@ namespace rocRoller::KernelGraph::ControlGraph
             return "Partial";
         case CacheStatus::Valid:
             return "Valid";
-        default:
+        case CacheStatus::Count:
             break;
         }
         Throw<FatalError>("Invalid CacheStatus");
@@ -96,7 +95,6 @@ namespace rocRoller::KernelGraph::ControlGraph
             return " RF";
 
         case NodeOrdering::Count:
-        default:
             break;
         }
         Throw<FatalError>("Invalid NodeOrdering");
@@ -118,7 +116,6 @@ namespace rocRoller::KernelGraph::ControlGraph
             return NodeOrdering::LeftFirst;
 
         case NodeOrdering::Count:
-        default:
             break;
         }
         Throw<FatalError>("Invalid NodeOrdering");

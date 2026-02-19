@@ -59,10 +59,15 @@ namespace rocRoller
                 case StorePath::VGPRToGlobalMemoryViaLDSWithBuffer:
                 case StorePath::VGPRToGlobalMemoryViaLDSWithGlobal:
                     return true;
-                default:
+
+                case StorePath::VGPRToGlobalMemoryWithBuffer:
+                case StorePath::VGPRToGlobalMemoryWithGlobal:
+                    return false;
+
+                case StorePath::Count:
                     break;
                 }
-                return false;
+                Throw<FatalError>("Invalid StorePath ", mode);
             }
 
             std::string toString(StorePath mode)
@@ -77,7 +82,8 @@ namespace rocRoller
                     return "VGPRToGlobalMemoryViaLDSWithBuffer";
                 case StorePath::VGPRToGlobalMemoryViaLDSWithGlobal:
                     return "VGPRToGlobalMemoryViaLDSWithGlobal";
-                default:
+
+                case StorePath::Count:
                     break;
                 }
                 return "Invalid";

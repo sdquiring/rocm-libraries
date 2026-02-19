@@ -39,7 +39,7 @@ namespace rocRoller
             return "Load";
         case MemoryInstructions::MemoryDirection::Store:
             return "Store";
-        default:
+        case MemoryInstructions::MemoryDirection::Count:
             break;
         }
 
@@ -65,7 +65,8 @@ namespace rocRoller
             return "Buffer";
         case MemoryInstructions::MemoryKind::Buffer2LDS:
             return "Buffer2LDS";
-        default:
+
+        case MemoryInstructions::MemoryKind::Count:
             break;
         }
 

@@ -59,7 +59,7 @@ namespace rocRoller
                 return ":";
             case RegisterLiveState::Allocated:
                 return "_";
-            default:
+            case RegisterLiveState::Count:
                 throw std::runtime_error(
                     concatenate("Invalid RegisterLiveState: ", static_cast<int>(state)));
             }

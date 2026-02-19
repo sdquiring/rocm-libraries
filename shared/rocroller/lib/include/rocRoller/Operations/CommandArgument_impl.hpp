@@ -149,8 +149,26 @@ namespace rocRoller
             return getValue<bool>(args);
         case DataType::E8M0:
             return getValue<E8M0>(args);
+
+        // case 
+        case DataType::ComplexFloat:
+        case DataType::ComplexDouble:
+        case DataType::Halfx2:
+        case DataType::BFloat16x2:
+        case DataType::FP8x4:
+        case DataType::BF8x4:
+        case DataType::FP4x8:
+        case DataType::FP6x16:
+        case DataType::BF6x16:
+        case DataType::Int8x4:
+        case DataType::Int16:
+        case DataType::UInt8x4:
+        case DataType::UInt16:
+        case DataType::Bool32:
+        case DataType::Bool64:
+        case DataType::E8M0x4:
+        case DataType::None:
         case DataType::Count:
-        default:
             Throw<FatalError>("Unsupported argument type ", ShowValue(m_variableType));
         }
     }

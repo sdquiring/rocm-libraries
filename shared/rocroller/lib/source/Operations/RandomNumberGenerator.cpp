@@ -73,9 +73,11 @@ namespace rocRoller
                 return "Default";
             case RandomNumberGenerator::SeedMode::PerThread:
                 return "PerThread";
-            default:
-                Throw<rocRoller::FatalError>("Bad value!");
+
+            case RandomNumberGenerator::SeedMode::Count:
+                break;
             }
+            Throw<rocRoller::FatalError>("Bad value!");
         }
 
         bool RandomNumberGenerator::operator==(RandomNumberGenerator const& other) const

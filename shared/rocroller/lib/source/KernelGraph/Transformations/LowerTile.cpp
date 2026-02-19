@@ -788,7 +788,9 @@ namespace rocRoller
             }
             break;
 
-            default:
+            case LayoutType::SCRATCH:
+            case LayoutType::None:
+            case LayoutType::Count:
                 Throw<FatalError>("addLoadWaveTileCT waveTile.layout not implemented yet.");
             }
         }

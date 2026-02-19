@@ -175,7 +175,7 @@ namespace rocRoller
                     return "T";
                 case TransposeType::N:
                     return "N";
-                default:
+                case TransposeType::Count:
                     rocRoller::Throw<rocRoller::FatalError>("Unknown transpose type");
                 }
             }

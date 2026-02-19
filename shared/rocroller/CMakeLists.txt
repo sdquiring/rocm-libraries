@@ -47,6 +47,8 @@ option(ROCROLLER_ENABLE_ASAN "Enable addresss sanitizers." OFF)
 option(ROCROLLER_ENABLE_PREGENERATED_ARCH_DEF "Use the pregenerates GPU architecture definition YAML file(s) in the repository." ON)
 set(ROCROLLER_MRISAS_DIR "${CMAKE_CURRENT_BINARY_DIR}/GPUArchitectureGenerator/amd-mrisa" CACHE STRING "Path to directory containing MRISA XML files.")
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if(ROCROLLER_ENABLE_TEST_DISCOVERY)
     enable_testing()
 endif()
@@ -151,6 +153,8 @@ add_library(rocroller-interface INTERFACE)
 add_library(roc::rocroller-interface ALIAS rocroller-interface)
 
 target_compile_options(rocroller PUBLIC $<BUILD_INTERFACE:-fmacro-prefix-map=${PROJECT_SOURCE_DIR}=shared/rocroller>)
+
+target_compile_options(rocroller PRIVATE -Werror=switch)
 
 if(ROCROLLER_ENABLE_ASAN AND NOT WIN32)
     rocroller_target_configure_sanitizers(rocroller PRIVATE)

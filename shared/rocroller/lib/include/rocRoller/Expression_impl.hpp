@@ -50,7 +50,7 @@ namespace rocRoller
                 return "KernelLaunch";
             case EvaluationTime::KernelExecute:
                 return "KernelExecute";
-            default:
+            case EvaluationTime::Count:
                 break;
             }
             Throw<FatalError>("Invalid EvaluationTime");
@@ -69,7 +69,7 @@ namespace rocRoller
                 return "Commutative";
             case AlgebraicProperty::Associative:
                 return "Associative";
-            default:
+            case rocRoller::Expression::AlgebraicProperty::Count:
                 break;
             }
             Throw<FatalError>("Invalid AlgebraicProperty");
@@ -94,7 +94,7 @@ namespace rocRoller
                 return "Conversion";
             case Category::Value:
                 return "Value";
-            default:
+            case Category::Count:
                 break;
             }
             Throw<FatalError>("Invalid Category");

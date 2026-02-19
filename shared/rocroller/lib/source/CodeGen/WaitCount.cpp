@@ -269,9 +269,10 @@ namespace rocRoller
             return m_expcnt;
         case GPUWaitQueue::VSQueue:
             return m_vscnt;
-        default:
-            return -1;
+        case GPUWaitQueue::Count:
+            break;
         }
+        return -1;
     }
 
     void WaitCount::setLoadcnt(int value)

@@ -39,7 +39,7 @@ namespace rocRoller
             return "MemoryViolation";
         case AssertOpKind::STrap:
             return "STrap";
-        default:
+        case AssertOpKind::Count:
             return "Invalid";
         }
     }

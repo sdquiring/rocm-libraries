@@ -393,7 +393,7 @@ namespace rocRoller::KernelGraph
                                 return "^";
                             case ControlFlowRWTracer::READWRITE:
                                 return "X";
-                            default:
+                            case ControlFlowRWTracer::Count:
                                 break;
                             }
                         }

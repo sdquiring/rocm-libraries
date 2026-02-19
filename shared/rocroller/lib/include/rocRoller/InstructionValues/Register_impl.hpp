@@ -302,9 +302,8 @@ namespace rocRoller
             case AllocationState::Count:
                 return "Count";
 
-            default:
-                throw std::runtime_error("Invalid allocation state!");
             }
+            Throw<FatalError>("Invalid allocation state!");
         }
 
         inline std::ostream& operator<<(std::ostream& stream, AllocationState state)

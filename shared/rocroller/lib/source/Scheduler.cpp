@@ -78,7 +78,8 @@ namespace rocRoller
                 return "VCC";
             case Dependency::SCC:
                 return "SCC";
-            default:
+
+            case Dependency::Count:
                 break;
             }
 
@@ -100,7 +101,8 @@ namespace rocRoller
                 return "Lock";
             case LockOperation::Unlock:
                 return "Unlock";
-            default:
+
+            case LockOperation::Count:
                 break;
             }
 

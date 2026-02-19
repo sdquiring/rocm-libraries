@@ -24,6 +24,7 @@
  *
  *******************************************************************************/
 
+#include "rocRoller/AssertOpKinds_fwd.hpp"
 #include <rocRoller/CodeGen/CopyGenerator.hpp>
 #include <rocRoller/CodeGen/CrashKernelGenerator.hpp>
 #include <rocRoller/CodeGen/MemoryInstructions.hpp>
@@ -55,7 +56,8 @@ namespace rocRoller
             break;
         case AssertOpKind::NoOp:
             Throw<FatalError>("Unexpected AssertOpKind::NoOp");
-        default:
+
+        case rocRoller::AssertOpKind::Count:
             Throw<FatalError>("Unknown AssertOpKind");
         }
     }

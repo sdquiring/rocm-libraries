@@ -45,7 +45,7 @@ namespace rocRoller
                 return "FirstFit";
             case AllocatorScheme::PerfectFit:
                 return "PerfectFit";
-            default:
+            case AllocatorScheme::Count:
                 break;
             }
 
@@ -287,7 +287,7 @@ namespace rocRoller
                 return findFreeFirstFit(count, options);
             case AllocatorScheme::PerfectFit:
                 return findFreePerfectFit(count, options);
-            default:
+            case AllocatorScheme::Count:
                 Throw<FatalError>("Allocator scheme not implemented.");
             }
         }
