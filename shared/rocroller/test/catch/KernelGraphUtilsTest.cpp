@@ -1,28 +1,5 @@
-/*******************************************************************************
- *
- * MIT License
- *
- * Copyright 2025 AMD ROCm(TM) Software
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- *******************************************************************************/
+// Copyright Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier: MIT
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -440,5 +417,80 @@ TEST_CASE("createInternalTile", "[kernel-graph]")
         CHECK(internalTile.sizes[0] == 64);
         CHECK(internalTile.sizes[1] == 64);
         CHECK(internalTile.memoryType == MemoryType::VGPR);
+    }
+}
+
+TEST_CASE("computeUserSize formula correctness", "[kernel-graph][utils][user-size]")
+{
+    using namespace rocRoller;
+    using namespace rocRoller::Expression;
+
+    SECTION("Single dimension contiguous")
+    {
+        auto size   = literal(16u);
+        auto stride = literal(1u);
+        auto result = KernelGraph::computeUserSize({size}, {stride});
+
+        // Expected: 1 + 1*(16-1) = 16
+        CHECK(getUnsignedInt(evaluate(result)) == 16);
+    }
+
+    SECTION("Multi-dimensional contiguous")
+    {
+        auto result
+            = KernelGraph::computeUserSize({literal(4u), literal(8u)}, {literal(1u), literal(4u)});
+
+        // Expected: 1 + 1*(4-1) + 4*(8-1) = 1 + 3 + 28 = 32
+        CHECK(getUnsignedInt(evaluate(result)) == 32);
+    }
+
+    SECTION("Non-contiguous layout")
+    {
+        auto result
+            = KernelGraph::computeUserSize({literal(4u), literal(2u)}, {literal(1u), literal(8u)});
+
+        // Logical tensor (4x2):
+        //   j=0  j=1
+        //   [0]  [1]   i=0
+        //   [2]  [3]   i=1
+        //   [4]  [5]   i=2
+        //   [6]  [7]   i=3
+        //
+        // Memory layout with strides [1, 8]:
+        // offset = i*1 + j*8
+        //
+        //   Memory index:  0  1  2  3  4  5  6  7  8  9  10 11
+        //   Used by:      [0][2][4][6] -  -  -  - [1][3][5][7]
+        //                 └─── j=0 ───┘           └─── j=1 ──┘
+        //
+        // Max offset = (3)*1 + (1)*8 = 11
+        // User size = 1 + max_offset = 12
+        //
+        // Formula: 1 + 1*(4-1) + 8*(2-1) = 1 + 3 + 8 = 12
+        CHECK(getUnsignedInt(evaluate(result)) == 12);
+    }
+
+    SECTION("Single element tensor")
+    {
+        auto result = KernelGraph::computeUserSize({literal(1u)}, {literal(1u)});
+
+        // Expected: 1 + 1*(1-1) = 1
+        CHECK(getUnsignedInt(evaluate(result)) == 1);
+    }
+
+    SECTION("Three-dimensional tensor")
+    {
+        auto result = KernelGraph::computeUserSize({literal(2u), literal(3u), literal(4u)},
+                                                   {literal(1u), literal(2u), literal(6u)});
+
+        // Expected: 1 + 1*(2-1) + 2*(3-1) + 6*(4-1) = 1 + 1 + 4 + 18 = 24
+        CHECK(getUnsignedInt(evaluate(result)) == 24);
+    }
+
+    SECTION("Empty dimensions")
+    {
+        auto result = KernelGraph::computeUserSize({}, {});
+
+        CHECK(getUnsignedInt(evaluate(result)) == 0);
     }
 }

@@ -1,28 +1,5 @@
-/*******************************************************************************
- *
- * MIT License
- *
- * Copyright 2024-2025 AMD ROCm(TM) Software
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- *******************************************************************************/
+// Copyright Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier: MIT
 
 /*
  * Command to KernelGraph translator
@@ -34,6 +11,7 @@
 #include <rocRoller/CommandSolution.hpp>
 #include <rocRoller/Expression.hpp>
 #include <rocRoller/KernelGraph/KernelGraph.hpp>
+#include <rocRoller/KernelGraph/Utils.hpp>
 #include <rocRoller/Operations/BlockScale.hpp>
 #include <rocRoller/Operations/Command.hpp>
 
@@ -86,6 +64,35 @@ namespace rocRoller
         }
 
         /**
+         * @brief Helper to convert CommandArgumentPtr vectors to ExpressionPtr vectors.
+         *
+         * Handles literal overrides (if literal value > 0, use it instead of the expression).
+         *
+         * @param args CommandArgument vector
+         * @param literals Optional literal values (if literals[i] > 0, use it instead of args[i])
+         * @return Vector of Expression shared pointers
+         */
+        std::vector<Expression::ExpressionPtr>
+            toExpressionVec(std::vector<CommandArgumentPtr> const& args,
+                            std::vector<size_t> const&             literals = {})
+        {
+            std::vector<Expression::ExpressionPtr> exprs;
+            exprs.reserve(args.size());
+            for(size_t i = 0; i < args.size(); ++i)
+            {
+                if(literals.size() > i && literals[i] > 0)
+                {
+                    exprs.push_back(Expression::literal(literals[i]));
+                }
+                else
+                {
+                    exprs.push_back(std::make_shared<Expression::Expression>(args[i]));
+                }
+            }
+            return exprs;
+        }
+
+        /**
          * @brief Command to KernelGraph translator.
          */
         struct TranslateVisitor
@@ -135,10 +142,10 @@ namespace rocRoller
 
                 auto totalSizeExpr = std::make_shared<Expression::Expression>(sizes[0]);
 
+                auto userSize = computeUserSize(toExpressionVec(sizes), toExpressionVec(strides));
+
                 auto user = m_graph.coordinates.addElement(
-                    User(tload.getTag(),
-                         tensor.data()->name(),
-                         std::make_shared<Expression::Expression>(tensor.limit())));
+                    User(tload.getTag(), tensor.data()->name(), userSize));
 
                 std::vector<int> dims;
                 for(size_t i = 0; i < sizes.size(); ++i)
@@ -241,10 +248,11 @@ namespace rocRoller
                 auto const strides        = tensor.strides();
                 auto const literalStrides = tensor.literalStrides();
 
+                auto userSize = computeUserSize(toExpressionVec(sizes, literalSizes),
+                                                toExpressionVec(strides, literalStrides));
+
                 auto user = m_graph.coordinates.addElement(
-                    User(tload.getTag(),
-                         tensor.data()->name(),
-                         std::make_shared<Expression::Expression>(tensor.limit())));
+                    User(tload.getTag(), tensor.data()->name(), userSize));
 
                 std::vector<int> dims;
                 for(size_t i = 0; i < sizes.size(); ++i)
@@ -315,6 +323,7 @@ namespace rocRoller
 
                 std::vector<int> dims;
                 auto             strides = tensor.strides();
+                auto             sizes   = tensor.sizes();
                 for(size_t i = 0; i < strides.size(); ++i)
                 {
                     auto strideExpr = std::make_shared<Expression::Expression>(strides[i]);
@@ -322,11 +331,11 @@ namespace rocRoller
                     dims.push_back(dim);
                 }
 
+                auto userSize = computeUserSize(toExpressionVec(sizes), toExpressionVec(strides));
+
                 auto linear = m_dim.at(tstore.getSrcTag());
                 auto user   = m_graph.coordinates.addElement(
-                    User(tstore.getSrcTag(),
-                         tensor.data()->name(),
-                         std::make_shared<Expression::Expression>(tensor.limit())));
+                    User(tstore.getSrcTag(), tensor.data()->name(), userSize));
 
                 m_graph.coordinates.addElement(Split(), std::vector<int>{linear}, dims);
                 m_graph.coordinates.addElement(Join(), dims, std::vector<int>{user});
@@ -364,6 +373,7 @@ namespace rocRoller
 
                 std::vector<int> dims;
                 auto const       strides        = tensor.strides();
+                auto const       sizes          = tensor.sizes();
                 auto const       literalStrides = tensor.literalStrides();
                 for(size_t i = 0; i < strides.size(); ++i)
                 {
@@ -381,11 +391,12 @@ namespace rocRoller
                     dims.push_back(dim);
                 }
 
+                auto userSize = computeUserSize(toExpressionVec(sizes),
+                                                toExpressionVec(strides, literalStrides));
+
                 auto tile = m_dim.at(tstore.getSrcTag());
                 auto user = m_graph.coordinates.addElement(
-                    User(tstore.getSrcTag(),
-                         tensor.data()->name(),
-                         std::make_shared<Expression::Expression>(tensor.limit())));
+                    User(tstore.getSrcTag(), tensor.data()->name(), userSize));
 
                 m_graph.coordinates.addElement(DestructMacroTile(), std::vector<int>{tile}, dims);
                 m_graph.coordinates.addElement(Join(), dims, std::vector<int>{user});

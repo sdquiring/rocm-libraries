@@ -1,28 +1,5 @@
-/*******************************************************************************
- *
- * MIT License
- *
- * Copyright 2024-2026 AMD ROCm(TM) Software
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- *******************************************************************************/
+// Copyright Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier: MIT
 
 #include <algorithm>
 #include <variant>
@@ -1083,7 +1060,11 @@ namespace rocRoller::KernelGraph
             if(!user)
                 return -1;
 
+            // Use User.size which has been updated by IdentifyParallelDimensions
+            // to reference non-redundant kernel arguments
             AssertFatal(user->size, "Invalid User dimension: missing size.", ShowValue(target));
+            auto bufferSize = ToBytes(user->size, params.valueType);
+            Log::debug("KernelGraph::makeBuffer: using User.size for user {}", target);
 
             // Get the base pointer from command arguments
             auto arg = findArgumentByName(command, user->argumentName);
@@ -1099,8 +1080,7 @@ namespace rocRoller::KernelGraph
             bufferExpr = BufferDescriptor::SetBasePointer(bufferExpr, basePointer);
             bufferExpr = BufferDescriptor::SetOptions(bufferExpr,
                                                       BufferDescriptor::GetDefaultOptions(context));
-            bufferExpr
-                = BufferDescriptor::SetSize(bufferExpr, ToBytes(user->size, params.valueType));
+            bufferExpr = BufferDescriptor::SetSize(bufferExpr, bufferSize);
 
             // Create the Assign node
             auto bufferVarType      = VariableType{DataType::None, PointerType::Buffer};

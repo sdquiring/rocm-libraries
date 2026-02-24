@@ -1,28 +1,5 @@
-/*******************************************************************************
- *
- * MIT License
- *
- * Copyright 2024-2026 AMD ROCm(TM) Software
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- *******************************************************************************/
+// Copyright Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier: MIT
 
 #include <rocRoller/KernelGraph/Transforms/CleanArguments.hpp>
 
@@ -171,31 +148,6 @@ namespace rocRoller
             rocRoller::KernelGraph::CoordinateGraph::Edge visitCoordinateEdge(int      tag,
                                                                               T const& edge)
             {
-                auto divideBySize = [&](int dimTag) {
-                    using ET  = Expression::EvaluationTime;
-                    auto dim  = m_graph.coordinates.getNode(dimTag);
-                    auto size = getSize(dim);
-                    if(size && !Expression::evaluationTimes(size)[ET::Translate])
-                    {
-                        auto resultType = resultVariableType(size);
-                        if(resultType == DataType::Int32 || resultType == DataType::Int64
-                           || resultType == DataType::UInt32 || resultType == DataType::UInt64)
-                            enableDivideBy(size, m_context);
-                    }
-                };
-                if constexpr(std::same_as<Tile, T>)
-                {
-                    auto loc = m_graph.coordinates.getLocation(tag);
-                    for(int i = 1; i < loc.outgoing.size(); i++)
-                        divideBySize(loc.outgoing[i]);
-                }
-
-                if constexpr(std::same_as<Flatten, T>)
-                {
-                    auto loc = m_graph.coordinates.getLocation(tag);
-                    for(int i = 1; i < loc.incoming.size(); i++)
-                        divideBySize(loc.incoming[i]);
-                }
                 return edge;
             }
 

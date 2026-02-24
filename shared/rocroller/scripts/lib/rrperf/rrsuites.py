@@ -1,27 +1,5 @@
-################################################################################
-#
-# MIT License
-#
-# Copyright (C) 2024-2026 AMD ROCm(TM) Software
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell cop-
-# ies of the Software, and to permit persons to whom the Software is furnished
-# to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IM-
-# PLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNE-
-# CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
-################################################################################
+# Copyright Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
 
 import pathlib
 from itertools import product
@@ -1452,7 +1430,7 @@ def fp4_mt32x32x256_d2lds_mi16x16x128_st32x8_pf2x1():
         load_B="BufferToLDS",
         loadScale_A="BufferToLDS",
         loadScale_B="BufferToLDS",
-        storeLDS_D=False,
+        store="VGPRToGlobalMemoryWithBuffer",
         prefetch=True,
         prefetchInFlight=2,
         prefetchLDSFactor=1,
@@ -1732,6 +1710,14 @@ def fp4_kernels_wgm():
     yield from fp4_single_scale_target_d2lds_mi16x16x128_pf4x1_wgm()
 
 
+def fp4_kernels_wgm_streamk():
+    # TODO: simplify to addStreamK(fp4_kernels_wgm()) once all tests are working
+    yield from addStreamK(fp4_target_d2lds_mi32x32x64_pf2x1_wgm())
+    # yield from addStreamK(fp4_target_d2lds_mi32x32x64_pf4x1_wgm())
+    # yield from addStreamK(fp4_target_d2lds_mi16x16x128_pf4x1_wgm())
+    yield from addStreamK(fp4_single_scale_target_d2lds_mi16x16x128_pf4x1_wgm())
+
+
 def fp4_16x16x128_scale_options():
     yield from fp4_target_d2lds_mi16x16x128_pf4x1_wgm()
     yield from addSkipPermlane(fp4_target_d2lds_mi16x16x128_pf4x1_wgm())
@@ -1747,6 +1733,7 @@ def fp4_32x32x64_scale_options():
 def fp4_kernels():
     yield from fp4_kernels_no_wgm()
     yield from fp4_kernels_wgm()
+    yield from fp4_kernels_wgm_streamk()
     yield from fp4_16x16x128_scale_options()
     yield from fp4_32x32x64_scale_options()
     yield from fp4_d2lds_wgts256x256x256()
