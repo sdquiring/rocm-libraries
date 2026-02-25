@@ -16,6 +16,13 @@ from dash import dcc, html
 from dash.dependencies import Input, Output
 
 
+max_per_type = {
+    "VGPR": 256,
+    "ACCVGPR": 256,
+    "SGPR": 102
+}
+
+
 class Instruction:
     """
     Single assembly instruction
@@ -212,6 +219,8 @@ def read_liveness(
 
 
 def make_figure(reg_type: str, df: pd.DataFrame) -> go.Figure:
+    max_y = [max_per_type[reg_type]] * len(df.index.tolist())
+
     fig = go.Figure(
         data=[
             go.Scatter(
@@ -229,6 +238,7 @@ def make_figure(reg_type: str, df: pd.DataFrame) -> go.Figure:
                 y=df["Max Allocated"],
                 name="Max Allocated " + reg_type,
             ),
+            go.Scatter(x=df.index.tolist(), y=max_y, name="Limit")
         ],
     )
     fig.update_layout(template=theme)
@@ -273,7 +283,7 @@ if __name__ == "__main__":
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.SLATE])
     server = app.server
 
-    theme = "plotly_dark"
+    theme = "plotly"
 
     fig_vgpr = make_figure("VGPR", df_vgpr)
     fig_sgpr = make_figure("SGPR", df_sgpr)
