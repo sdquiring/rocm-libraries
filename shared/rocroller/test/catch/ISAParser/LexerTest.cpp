@@ -154,8 +154,8 @@ TEST_CASE("Lexer handles multiline source", "[ISAParser][Lexer]")
     std::string source = "s_mov_b32 s0, 0\n"
                          "v_add_f32 v0, v1, v2\n"
                          "s_endpgm";
-    Lexer       lexer(source);
-    auto        tokens = lexer.tokenize();
+    Lexer lexer(source);
+    auto  tokens = lexer.tokenize();
 
     // Count opcodes
     int opcodeCount = 0;
@@ -171,8 +171,8 @@ TEST_CASE("Lexer tracks line numbers correctly", "[ISAParser][Lexer]")
 {
     std::string source = "s_mov_b32 s0, 0\n"
                          "v_add_f32 v0, v1, v2\n";
-    Lexer       lexer(source);
-    auto        tokens = lexer.tokenize();
+    Lexer lexer(source);
+    auto  tokens = lexer.tokenize();
 
     REQUIRE(tokens[0].line == 1); // First opcode on line 1
     // Find second opcode
@@ -973,7 +973,8 @@ TEST_CASE("Lexer: Directive with quoted string", "[ISAParser][Lexer]")
     // The Lexer doesn't preserve hyphens/plus in strings - this is a known limitation
     // Concatenate all tokens between directive and newline
     std::string fullTarget;
-    for (size_t i = 1; i < tokens.size() && tokens[i].type != TokenType::Newline; ++i) {
+    for(size_t i = 1; i < tokens.size() && tokens[i].type != TokenType::Newline; ++i)
+    {
         fullTarget += tokens[i].text;
     }
 
@@ -995,8 +996,10 @@ TEST_CASE("Lexer: Branch with label reference", "[ISAParser][Lexer]")
 
     // Check if label reference is captured
     bool foundLabelRef = false;
-    for (const auto& tok : tokens) {
-        if (tok.type == TokenType::LabelRef) {
+    for(const auto& tok : tokens)
+    {
+        if(tok.type == TokenType::LabelRef)
+        {
             foundLabelRef = true;
             CHECK(tok.text == "Llabel_123");
         }
@@ -1007,23 +1010,26 @@ TEST_CASE("Lexer: Branch with label reference", "[ISAParser][Lexer]")
 TEST_CASE("Lexer: Standard label without period", "[ISAParser][Lexer]")
 {
     std::string input = "BB0_1:\n    v_add_f32 v0, v1, v2\n    s_branch BB0_1\n";
-    
+
     Lexer lexer(input);
-    auto tokens = lexer.tokenize();
-    
+    auto  tokens = lexer.tokenize();
+
     // Should find a Label token for "BB0_1:"
-    bool foundLabel = false;
+    bool foundLabel    = false;
     bool foundLabelRef = false;
-    
-    for (const auto& tok : tokens) {
-        if (tok.type == TokenType::Label && tok.text == "BB0_1:") {
+
+    for(const auto& tok : tokens)
+    {
+        if(tok.type == TokenType::Label && tok.text == "BB0_1:")
+        {
             foundLabel = true;
         }
-        if (tok.type == TokenType::LabelRef && tok.text == "BB0_1") {
+        if(tok.type == TokenType::LabelRef && tok.text == "BB0_1")
+        {
             foundLabelRef = true;
         }
     }
-    
+
     CHECK(foundLabel);
     CHECK(foundLabelRef);
 }

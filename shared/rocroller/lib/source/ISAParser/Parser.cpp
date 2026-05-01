@@ -210,8 +210,7 @@ namespace rocRoller::ISAParser
         if(tok.text.find('[') != std::string::npos)
         {
             // Parse register range
-            return parseRegisterRange(tok.text).empty() ? nullptr
-                                                        : parseRegisterRange(tok.text)[0];
+            return parseRegisterRange(tok.text).empty() ? nullptr : parseRegisterRange(tok.text)[0];
         }
 
         // Parse simple register like s0, v5, a2
@@ -364,8 +363,8 @@ namespace rocRoller::ISAParser
             else
             {
                 // Single register in brackets like s[5]
-                int idx = std::stoi(
-                    rangeText.substr(leftBracket + 1, rightBracket - leftBracket - 1));
+                int idx
+                    = std::stoi(rangeText.substr(leftBracket + 1, rightBracket - leftBracket - 1));
                 registers.push_back(std::make_shared<Register::Value>(
                     m_context, regType, VariableType(DataType::Raw32), std::vector<int>{idx}));
             }

@@ -9,9 +9,9 @@
 #include <vector>
 
 #include <rocRoller/Context_fwd.hpp>
-#include <rocRoller/InstructionValues/Register_fwd.hpp>
 #include <rocRoller/ISAParser/Parser_fwd.hpp>
 #include <rocRoller/ISAParser/Token.hpp>
+#include <rocRoller/InstructionValues/Register_fwd.hpp>
 
 // Forward declare YAML::Node to avoid pulling in yaml-cpp header
 namespace YAML
@@ -26,14 +26,14 @@ namespace rocRoller::ISAParser
      */
     struct ParsedInstruction
     {
-        std::string                      opcode;
-        std::vector<Register::ValuePtr>  dstOperands;
-        std::vector<Register::ValuePtr>  srcOperands;
-        std::vector<std::string>         modifiers;
-        std::string                      comment;
-        int                              lineNumber;
-        std::optional<std::string>       label;        // Label on this line (e.g., "loop_start:")
-        std::optional<std::string>       branchTarget; // Target for branch instructions
+        std::string                     opcode;
+        std::vector<Register::ValuePtr> dstOperands;
+        std::vector<Register::ValuePtr> srcOperands;
+        std::vector<std::string>        modifiers;
+        std::string                     comment;
+        int                             lineNumber;
+        std::optional<std::string>      label; // Label on this line (e.g., "loop_start:")
+        std::optional<std::string>      branchTarget; // Target for branch instructions
 
         ParsedInstruction()
             : lineNumber(0)
@@ -46,19 +46,19 @@ namespace rocRoller::ISAParser
      */
     struct ParsedFile
     {
-        std::string                           targetArch; // e.g., "gfx90a:sramecc+"
-        std::string                           kernelName;
-        std::vector<ParsedInstruction>        instructions;
-        std::unordered_map<std::string, int>  labelMap; // label -> instruction index
-        std::shared_ptr<YAML::Node>           amdgpuMetadata; // Parsed YAML metadata
+        std::string                          targetArch; // e.g., "gfx90a:sramecc+"
+        std::string                          kernelName;
+        std::vector<ParsedInstruction>       instructions;
+        std::unordered_map<std::string, int> labelMap; // label -> instruction index
+        std::shared_ptr<YAML::Node>          amdgpuMetadata; // Parsed YAML metadata
 
         struct KernelMetadata
         {
-            int sgprCount       = 0;
-            int vgprCount       = 0;
-            int accvgprCount    = 0;
-            int ldsSize         = 0; // In bytes
-            int wavefrontSize   = 64; // 32 or 64
+            int sgprCount     = 0;
+            int vgprCount     = 0;
+            int accvgprCount  = 0;
+            int ldsSize       = 0; // In bytes
+            int wavefrontSize = 64; // 32 or 64
         } metadata;
     };
 
@@ -100,9 +100,9 @@ namespace rocRoller::ISAParser
         void parseYAMLMetadata(ParsedFile& file, Token const& yamlToken);
 
         // Operand parsing
-        Register::ValuePtr parseOperand();
-        Register::ValuePtr parseRegister(Token const& tok);
-        Register::ValuePtr parseLiteral(Token const& tok);
+        Register::ValuePtr              parseOperand();
+        Register::ValuePtr              parseRegister(Token const& tok);
+        Register::ValuePtr              parseLiteral(Token const& tok);
         std::vector<Register::ValuePtr> parseRegisterRange(std::string const& rangeText);
 
         // Modifier parsing
