@@ -70,6 +70,8 @@ target_sources(rocroller-tests-catch
         "${CMAKE_CURRENT_SOURCE_DIR}/HypergraphTest.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/IdentifyParallelDimensionsTest.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/InstructionTest.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ISAParser/LexerTest.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ISAParser/ParserTest.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/KernelArgumentsTest.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/KernelGraphColouringTest.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/KernelGraphConstraintsTest.cpp"
